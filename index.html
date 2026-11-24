@@ -191,6 +191,7 @@ function connectWS(handlers){
 function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
 function newPeer(){
+  if (pc) { try { pc.close(); } catch {} pc = null; }
   pc = new RTCPeerConnection(iceConfig);
   remoteReady = false; iceQueue.length = 0;
   pc.onicecandidate = e => { if (e.candidate) send({ type:"ice", candidate:e.candidate }); };
@@ -330,17 +331,32 @@ async function startSharing(){
     "guest-joined": async () => {
       $("hostStatus").textContent = "Viewer joined — connecting…";
       newPeer();
-      const transceivers = localStream.getTracks().map(t => pc.addTransceiver(t, { streams: [localStream] }));
+      const myPc = pc;
+      const transceivers = localStream.getTracks().map(t => myPc.addTransceiver(t, { streams: [localStream] }));
       const vTr = transceivers.find(t => t.sender.track && t.sender.track.kind === "video");
       if (vTr) preferCodecs(vTr);
       tuneSender(localStream);
-      pc.onconnectionstatechange = () => {
-        window.__pcState = pc.connectionState;
-        if (pc.connectionState === "connected") { $("hostDot").className = "dot live"; $("hostStatus").textContent = "Live — they're watching your screen."; startStats($("hostStats")); }
-        if (pc.connectionState === "failed") { $("hostDot").className = "dot err"; $("hostStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+      let restarted = false;
+      myPc.onconnectionstatechange = async () => {
+        if (pc !== myPc) return; // a newer connection owns the status now
+        window.__pcState = myPc.connectionState;
+        if (myPc.connectionState === "connected") { $("hostDot").className = "dot live"; $("hostStatus").textContent = "Live — they're watching your screen."; startStats($("hostStats")); }
+        if (myPc.connectionState === "failed") {
+          if (!restarted) {
+            restarted = true;
+            $("hostStatus").textContent = "Connection stumbled — retrying…";
+            try {
+              const o = await myPc.createOffer({ iceRestart: true });
+              await myPc.setLocalDescription(o);
+              if (pc === myPc) send({ type:"offer", sdp: o });
+              return;
+            } catch {}
+          }
+          if (pc === myPc) { $("hostDot").className = "dot err"; $("hostStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+        }
       };
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      const offer = await myPc.createOffer();
+      await myPc.setLocalDescription(offer);
       send({ type:"offer", sdp: offer });
     },
     answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
@@ -378,11 +394,13 @@ async function startWatching(){
 
   await loadIce();
   newPeer();
+  const myPc = pc;
   pc.ontrack = e => { $("remoteVideo").srcObject = e.streams[0]; tuneReceivers(); };
   pc.onconnectionstatechange = () => {
-    window.__pcState = pc.connectionState;
-    if (pc.connectionState === "connected") { $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
-    if (pc.connectionState === "failed") { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+    if (pc !== myPc) return; // a newer connection owns the status now
+    window.__pcState = myPc.connectionState;
+    if (myPc.connectionState === "connected") { $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
+    if (myPc.connectionState === "failed") { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
   };
 
   connectWS({

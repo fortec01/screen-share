@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScreenShare — watch together</title>
+<style>
+  :root{
+    --bg:#0b0b10; --card:#15151f; --line:#262633; --text:#f2f2f7;
+    --muted:#9a9aad; --accent:#6c5cff; --accent2:#00c2a8; --danger:#ff5c7a;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; min-height:100vh;}
+  .wrap{max-width:880px; margin:0 auto; padding:28px 18px 48px;}
+  h1{font-size:30px; letter-spacing:-.5px;}
+  h1 span{color:var(--accent);}
+  .sub{color:var(--muted); margin-top:6px; font-size:15px; line-height:1.5;}
+  .cards{display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:26px;}
+  @media(max-width:620px){.cards{grid-template-columns:1fr;}}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px;}
+  .card h2{font-size:19px; margin-bottom:6px;}
+  .card p{color:var(--muted); font-size:14px; line-height:1.5; margin-bottom:14px;}
+  button{background:var(--accent); color:#fff; border:0; border-radius:10px; padding:12px 18px; font-size:15px; font-weight:600; cursor:pointer; width:100%;}
+  button.alt{background:var(--accent2);}
+  button.ghost{background:transparent; border:1px solid var(--line); color:var(--text);}
+  button.danger{background:var(--danger);}
+  button:disabled{opacity:.45; cursor:default;}
+  input,select{background:#0e0e16; border:1px solid var(--line); color:var(--text); border-radius:10px; padding:12px; font-size:16px; width:100%;}
+  input{text-transform:uppercase; letter-spacing:2px; text-align:center;}
+  label{font-size:13px; color:var(--muted); display:block; margin:12px 0 6px;}
+  .stage{margin-top:22px; display:none;}
+  .stage.on{display:block;}
+  .videobox{background:#000; border:1px solid var(--line); border-radius:16px; overflow:hidden; position:relative;}
+  video{width:100%; display:block; background:#000; max-height:70vh;}
+  .status{display:flex; align-items:center; gap:8px; margin:14px 2px; color:var(--muted); font-size:14px; flex-wrap:wrap;}
+  .dot{width:10px; height:10px; border-radius:50%; background:#666; flex:none;}
+  .dot.wait{background:#ffb020;} .dot.live{background:var(--accent2);} .dot.err{background:var(--danger);}
+  .stats{color:var(--muted); font-size:12.5px; font-variant-numeric:tabular-nums;}
+  .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
+  .codebox .code{flex:1; background:#0e0e16; border:1px dashed var(--accent); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:6px; padding:10px;}
+  .codebox button{width:auto; padding:0 18px;}
+  .row{display:flex; gap:10px; margin-top:14px;}
+  .row button{flex:1;}
+  .hint{color:var(--muted); font-size:13px; line-height:1.55; margin-top:12px;}
+  .err{color:var(--danger); font-size:14px; margin-top:10px; min-height:18px;}
+  footer{color:var(--muted); font-size:12.5px; margin-top:34px; line-height:1.6; border-top:1px solid var(--line); padding-top:16px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Screen<span>Share</span></h1>
+  <p class="sub">Share your screen live, straight from your browser to theirs. The video travels directly between the two browsers — no server in the middle, nothing recorded, nothing uploaded anywhere.</p>
+
+  <div class="cards" id="home">
+    <div class="card">
+      <h2>📺 Share my screen</h2>
+      <p>Pick a screen, tab or window. You get a code and a link — send either to the person watching.</p>
+      <label for="quality">Quality</label>
+      <select id="quality">
+        <option value="auto">Auto (browser adapts)</option>
+        <option value="1080p30">1080p · 30 fps</option>
+        <option value="1080p60" selected>1080p · 60 fps — smooth</option>
+        <option value="1440p30">1440p · 30 fps</option>
+        <option value="1440p60">1440p · 60 fps</option>
+        <option value="2160p30">4K · 30 fps (strong PC + fast upload)</option>
+        <option value="2160p60">4K · 60 fps (very fast upload)</option>
+      </select>
+      <label for="mode">Watching</label>
+      <select id="mode">
+        <option value="motion" selected>Video / movies — smoothest motion</option>
+        <option value="detail">Text / code — sharpest picture</option>
+      </select>
+      <div style="height:14px"></div>
+      <button id="btnShare">Start sharing</button>
+      <div class="err" id="shareErr"></div>
+    </div>
+    <div class="card">
+      <h2>👀 Watch a screen</h2>
+      <p>Enter the 6-letter code you were given — or just open the link they sent you, it fills itself in.</p>
+      <label for="code">Room code</label>
+      <input id="code" maxlength="6" placeholder="ABC123" autocomplete="off">
+      <div style="height:14px"></div>
+      <button class="alt" id="btnWatch">Watch</button>
+      <div class="err" id="watchErr"></div>
+    </div>
+  </div>
+
+  <!-- HOST STAGE -->
+  <div class="stage" id="hostStage">
+    <div class="videobox"><video id="localVideo" autoplay muted playsinline></video></div>
+    <div class="status"><div class="dot wait" id="hostDot"></div><span id="hostStatus">Waiting for your viewer to join…</span><span class="stats" id="hostStats"></span></div>
+    <label>Send them this code — or copy the link, it carries the code with it</label>
+    <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
+    <div class="row"><button class="danger" id="btnStop">Stop sharing</button></div>
+    <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
+  </div>
+
+  <!-- GUEST STAGE -->
+  <div class="stage" id="guestStage">
+    <div class="videobox"><video id="remoteVideo" autoplay playsinline controls></video></div>
+    <div class="status"><div class="dot wait" id="guestDot"></div><span id="guestStatus">Connecting…</span><span class="stats" id="guestStats"></span></div>
+    <div class="row">
+      <button class="ghost" id="btnFull">Fullscreen</button>
+      <button class="danger" id="btnLeave">Leave</button>
+    </div>
+    <p class="hint">If the picture is frozen or black for more than ~20 seconds, the connection may be blocked by a strict network on one side — try a different Wi-Fi or mobile data on one end.</p>
+  </div>
+
+  <footer>
+    How it works: your browsers find each other through a tiny introductions server, then the screen flows directly between them (WebRTC, encrypted end to end). Tuned for smoothness: hardware-friendly codec order, 60 fps capture, low-latency playback. Quality is capped by the sharing computer and the upload speed — 1080p60 ≈ 12 Mbps, 1440p60 ≈ 32 Mbps, 4K30 ≈ 45 Mbps of upload. View-only: the watcher can't click or type on your screen.
+  </footer>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
+const ICE = { iceServers: [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun1.l.google.com:19302" }
+]};
+const TEST = new URLSearchParams(location.search).get("test") === "1";
+
+const QUALITY = {
+  "1080p30": { w:1920, h:1080, fps:30, br:8_000_000 },
+  "1080p60": { w:1920, h:1080, fps:60, br:12_000_000 },
+  "1440p30": { w:2560, h:1440, fps:30, br:20_000_000 },
+  "1440p60": { w:2560, h:1440, fps:60, br:32_000_000 },
+  "2160p30": { w:3840, h:2160, fps:30, br:45_000_000 },
+  "2160p60": { w:3840, h:2160, fps:60, br:80_000_000 }
+};
+
+let ws = null, pc = null, localStream = null, statsTimer = null;
+
+function connectWS(handlers){
+  ws = new WebSocket(WS_URL);
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (handlers[msg.type]) handlers[msg.type](msg);
+  };
+  return ws;
+}
+function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+function newPeer(){
+  pc = new RTCPeerConnection(ICE);
+  pc.onicecandidate = e => { if (e.candidate) send({ type:"ice", candidate:e.candidate }); };
+  return pc;
+}
+
+/* Prefer H.264 (hardware-encoded on most laptops -> higher, steadier fps),
+   then VP9, then VP8. Keep every codec, just re-ordered. */
+function preferCodecs(transceiver){
+  try {
+    const caps = RTCRtpSender.getCapabilities("video");
+    if (!caps) return;
+    const rank = m => m === "video/H264" ? 0 : m === "video/VP9" ? 1 : m === "video/VP8" ? 2 : 3;
+    const sorted = [...caps.codecs].sort((a,b) => rank(a.mimeType) - rank(b.mimeType));
+    transceiver.setCodecPreferences(sorted);
+  } catch {}
+}
+
+function tuneSender(stream){
+  const q = QUALITY[$("quality").value];
+  const track = stream.getVideoTracks()[0];
+  if (!track) return;
+  const motion = $("mode").value === "motion";
+  try { track.contentHint = motion ? "motion" : "detail"; } catch {}
+  if (q) {
+    track.applyConstraints({ width:{max:q.w}, height:{max:q.h}, frameRate:{max:q.fps} }).catch(()=>{});
+  }
+  const apply = () => {
+    const sender = pc && pc.getSenders().find(s => s.track === track);
+    if (!sender) return;
+    const p = sender.getParameters();
+    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    if (q) { p.encodings[0].maxBitrate = q.br; p.encodings[0].maxFramerate = q.fps; }
+    p.degradationPreference = motion ? "maintain-framerate" : "maintain-resolution";
+    sender.setParameters(p).catch(()=>{});
+  };
+  setTimeout(apply, 400); setTimeout(apply, 1500);
+}
+
+/* Low-latency playback on the receiving side. */
+function tuneReceivers(){
+  try {
+    pc.getReceivers().forEach(r => {
+      if ("playoutDelayHint" in r) r.playoutDelayHint = 0;
+      if ("jitterBufferTarget" in r) r.jitterBufferTarget = 0;
+    });
+  } catch {}
+}
+
+/* Live stats (fps / bitrate / resolution) shown on both sides,
+   and exposed on window.__stats for automated end-to-end tests. */
+function startStats(el){
+  let lastBytes = 0, lastTime = 0, lastFrames = 0;
+  clearInterval(statsTimer);
+  statsTimer = setInterval(async () => {
+    if (!pc) return;
+    try {
+      const stats = await pc.getStats();
+      stats.forEach(s => {
+        if (s.type === "inbound-rtp" && s.kind === "video") {
+          const now = performance.now();
+          let mbps = 0;
+          if (lastTime) mbps = (s.bytesReceived - lastBytes) * 8 / ((now - lastTime) / 1000) / 1e6;
+          lastBytes = s.bytesReceived; lastTime = now;
+          const out = { fps: Math.round(s.framesPerSecond || 0), mbps: +mbps.toFixed(2),
+                        w: s.frameWidth || 0, h: s.frameHeight || 0,
+                        decoded: s.framesDecoded || 0, dropped: s.framesDropped || 0 };
+          window.__stats = out;
+          el.textContent = out.w ? `· ${out.w}×${out.h} · ${out.fps} fps · ${out.mbps} Mbps` : "";
+        }
+        if (s.type === "outbound-rtp" && s.kind === "video") {
+          const out = { fps: Math.round(s.framesPerSecond || 0), w: s.frameWidth || 0, h: s.frameHeight || 0, sent: s.bytesSent || 0 };
+          window.__stats = out;
+          el.textContent = out.w ? `· sending ${out.w}×${out.h} · ${out.fps} fps` : "";
+        }
+      });
+    } catch {}
+  }, 2000);
+}
+
+/* Animated canvas stream used by the automated end-to-end test (?test=1). */
+function makeTestStream(){
+  const c = document.createElement("canvas");
+  c.width = 1280; c.height = 720;
+  const ctx = c.getContext("2d");
+  let x = 40, y = 40, dx = 5, dy = 4, n = 0;
+  setInterval(() => {
+    ctx.fillStyle = "#101018"; ctx.fillRect(0,0,1280,720);
+    x += dx; y += dy;
+    if (x < 20 || x > 1100) dx = -dx;
+    if (y < 20 || y > 540) dy = -dy;
+    ctx.fillStyle = "#6c5cff"; ctx.fillRect(x, y, 160, 160);
+    ctx.fillStyle = "#00c2a8"; ctx.beginPath(); ctx.arc(1100, 140, 70, 0, 7); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "bold 64px monospace";
+    ctx.fillText("FRAME " + (n++), 60, 660);
+    ctx.font = "36px monospace";
+    ctx.fillText(new Date().toISOString().slice(11,23), 60, 90);
+  }, 1000/60);
+  return c.captureStream(60);
+}
+
+/* ---------- HOST ---------- */
+async function startSharing(){
+  $("shareErr").textContent = "";
+  try {
+    localStream = TEST ? makeTestStream()
+      : await navigator.mediaDevices.getDisplayMedia({
+          video: { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" },
+          audio: true
+        });
+  } catch { $("shareErr").textContent = "Screen pick was cancelled, or this browser can't share (use Chrome/Edge on a computer)."; return; }
+  $("home").style.display = "none";
+  $("hostStage").classList.add("on");
+  $("localVideo").srcObject = localStream;
+  const vt = localStream.getVideoTracks()[0];
+  if (vt) vt.onended = stopSharing;
+
+  connectWS({
+    created: msg => {
+      $("roomCode").textContent = msg.code;
+      document.title = "ROOM " + msg.code;
+      history.replaceState(null,"","?room="+msg.code);
+    },
+    "guest-joined": async () => {
+      $("hostStatus").textContent = "Viewer joined — connecting…";
+      newPeer();
+      const transceivers = localStream.getTracks().map(t => pc.addTransceiver(t, { streams: [localStream] }));
+      const vTr = transceivers.find(t => t.sender.track && t.sender.track.kind === "video");
+      if (vTr) preferCodecs(vTr);
+      tuneSender(localStream);
+      pc.onconnectionstatechange = () => {
+        window.__pcState = pc.connectionState;
+        if (pc.connectionState === "connected") { $("hostDot").className = "dot live"; $("hostStatus").textContent = "Live — they're watching your screen."; startStats($("hostStats")); }
+        if (pc.connectionState === "failed") { $("hostDot").className = "dot err"; $("hostStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+      };
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      send({ type:"offer", sdp: offer });
+    },
+    answer: async msg => { await pc.setRemoteDescription(msg.sdp); },
+    ice: async msg => { try { await pc.addIceCandidate(msg.candidate); } catch {} },
+    "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
+    error: msg => { $("hostStatus").textContent = msg.message; }
+  });
+  ws.onopen = () => send({ type:"create" });
+}
+$("btnShare").onclick = startSharing;
+
+function stopSharing(){
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
+  if (pc) pc.close();
+  if (ws) ws.close();
+  location.href = location.pathname;
+}
+$("btnStop").onclick = stopSharing;
+$("btnCopy").onclick = async () => {
+  const link = location.origin + location.pathname + "?room=" + $("roomCode").textContent;
+  try { await navigator.clipboard.writeText(link); $("btnCopy").textContent = "Copied ✓"; setTimeout(()=>$("btnCopy").textContent="Copy link", 1600); }
+  catch { prompt("Copy this link:", link); }
+};
+
+/* ---------- GUEST ---------- */
+const params = new URLSearchParams(location.search);
+if (params.get("room")) $("code").value = params.get("room").toUpperCase();
+
+function startWatching(){
+  const code = $("code").value.trim().toUpperCase();
+  $("watchErr").textContent = "";
+  if (code.length !== 6) { $("watchErr").textContent = "That code is 6 characters — check it and try again."; return; }
+  $("home").style.display = "none";
+  $("guestStage").classList.add("on");
+
+  newPeer();
+  pc.ontrack = e => { $("remoteVideo").srcObject = e.streams[0]; tuneReceivers(); };
+  pc.onconnectionstatechange = () => {
+    window.__pcState = pc.connectionState;
+    if (pc.connectionState === "connected") { $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
+    if (pc.connectionState === "failed") { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+  };
+
+  connectWS({
+    joined: () => { $("guestStatus").textContent = "In the room — waiting for the picture…"; },
+    offer: async msg => {
+      await pc.setRemoteDescription(msg.sdp);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      send({ type:"answer", sdp: answer });
+    },
+    ice: async msg => { try { await pc.addIceCandidate(msg.candidate); } catch {} },
+    "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
+    error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
+  });
+  ws.onopen = () => send({ type:"join", code });
+}
+$("btnWatch").onclick = startWatching;
+$("btnLeave").onclick = () => location.href = location.pathname;
+$("btnFull").onclick = () => { const v = $("remoteVideo"); if (v.requestFullscreen) v.requestFullscreen(); };
+
+/* Automated end-to-end test entry points. */
+if (TEST && params.get("room")) startWatching();
+if (TEST && !params.get("room")) startSharing();
+</script>
+</body>
+</html>

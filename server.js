@@ -24,10 +24,35 @@ const TURN_URLS = [
   "turn:137.23.34.173:3478?transport=tcp",
 ];
 
-const server = http.createServer((req, res) => {
+// Preferred relay: Cloudflare TURN — a global relay network that stays
+// reachable on strict networks (it can run over the standard secure-web
+// port). The server mints short-lived credentials from Cloudflare's API;
+// the key itself lives only in this service's env. If Cloudflare is not
+// configured or its API fails, we fall back to the self-hosted relay.
+const CF_TURN_KEY_ID = process.env.CF_TURN_KEY_ID || "";
+const CF_TURN_TOKEN = process.env.CF_TURN_TOKEN || "";
+
+const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
   if (url === "/turn") {
+    if (CF_TURN_KEY_ID && CF_TURN_TOKEN) {
+      try {
+        const r = await fetch("https://rtc.live.cloudflare.com/v1/turn/keys/" + CF_TURN_KEY_ID + "/credentials/generate", {
+          method: "POST",
+          headers: { Authorization: "Bearer " + CF_TURN_TOKEN, "Content-Type": "application/json" },
+          body: JSON.stringify({ ttl: 86400 }),
+          signal: AbortSignal.timeout(6000),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          const ice = data.iceServers || {};
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ urls: ice.urls, username: ice.username, credential: ice.credential }));
+          return;
+        }
+      } catch (e) { /* fall through to the self-hosted relay */ }
+    }
     if (!TURN_SECRET) { res.writeHead(503); res.end("turn not configured"); return; }
     const username = String(Math.floor(Date.now() / 1000) + 3600);
     const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");

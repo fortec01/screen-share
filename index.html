@@ -150,6 +150,22 @@ const ICE = { iceServers: [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" }
 ]};
+let iceConfig = ICE;
+/* Ask the server for short-lived TURN relay credentials. The relay is
+   what gets two browsers connected when a strict network blocks the
+   direct path. Falls back to STUN-only if unavailable. */
+async function loadIce(){
+  try {
+    const r = await fetch("/turn");
+    if (r.ok) {
+      const t = await r.json();
+      iceConfig = { iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: t.urls, username: t.username, credential: t.credential }
+      ]};
+    }
+  } catch {}
+}
 const TEST = new URLSearchParams(location.search).get("test") === "1";
 
 const QUALITY = {
@@ -162,6 +178,7 @@ const QUALITY = {
 };
 
 let ws = null, pc = null, localStream = null, statsTimer = null;
+let remoteReady = false; const iceQueue = [];
 
 function connectWS(handlers){
   ws = new WebSocket(WS_URL);
@@ -174,9 +191,22 @@ function connectWS(handlers){
 function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
 function newPeer(){
-  pc = new RTCPeerConnection(ICE);
+  pc = new RTCPeerConnection(iceConfig);
+  remoteReady = false; iceQueue.length = 0;
   pc.onicecandidate = e => { if (e.candidate) send({ type:"ice", candidate:e.candidate }); };
   return pc;
+}
+
+/* Candidates that arrive before the remote description is set must be
+   queued, not dropped — adding them early throws, and losing them all
+   leaves the connection stuck at "connecting" forever. */
+async function addIce(c){
+  if (!remoteReady) { iceQueue.push(c); return; }
+  try { await pc.addIceCandidate(c); } catch {}
+}
+async function flushIce(){
+  remoteReady = true;
+  for (const c of iceQueue.splice(0)) { try { await pc.addIceCandidate(c); } catch {} }
 }
 
 /* Prefer H.264 (hardware-encoded on most laptops -> higher, steadier fps),
@@ -287,6 +317,7 @@ async function startSharing(){
   $("home").style.display = "none";
   $("hostStage").classList.add("on");
   $("localVideo").srcObject = localStream;
+  await loadIce();
   const vt = localStream.getVideoTracks()[0];
   if (vt) vt.onended = stopSharing;
 
@@ -312,8 +343,8 @@ async function startSharing(){
       await pc.setLocalDescription(offer);
       send({ type:"offer", sdp: offer });
     },
-    answer: async msg => { await pc.setRemoteDescription(msg.sdp); },
-    ice: async msg => { try { await pc.addIceCandidate(msg.candidate); } catch {} },
+    answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
+    ice: async msg => { await addIce(msg.candidate); },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -338,13 +369,14 @@ $("btnCopy").onclick = async () => {
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("code").value = params.get("room").toUpperCase();
 
-function startWatching(){
+async function startWatching(){
   const code = $("code").value.trim().toUpperCase();
   $("watchErr").textContent = "";
   if (code.length !== 6) { $("watchErr").textContent = "That code is 6 characters — check it and try again."; return; }
   $("home").style.display = "none";
   $("guestStage").classList.add("on");
 
+  await loadIce();
   newPeer();
   pc.ontrack = e => { $("remoteVideo").srcObject = e.streams[0]; tuneReceivers(); };
   pc.onconnectionstatechange = () => {
@@ -357,11 +389,12 @@ function startWatching(){
     joined: () => { $("guestStatus").textContent = "In the room — waiting for the picture…"; },
     offer: async msg => {
       await pc.setRemoteDescription(msg.sdp);
+      await flushIce();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       send({ type:"answer", sdp: answer });
     },
-    ice: async msg => { try { await pc.addIceCandidate(msg.candidate); } catch {} },
+    ice: async msg => { await addIce(msg.candidate); },
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

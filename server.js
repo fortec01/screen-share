@@ -14,9 +14,24 @@ const { WebSocketServer } = require("ws");
 const PORT = process.env.PORT || 8080;
 const PUBLIC = __dirname;
 
+const PROBE_HTML = `<!DOCTYPE html><html><body><pre id="out">gathering…</pre><script>
+(async () => {
+  const out = [];
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:137.23.34.173:3478" }] });
+  pc.onicecandidate = e => {
+    if (e.candidate) out.push(e.candidate.candidate);
+    else { document.getElementById("out").textContent = out.join("\\n") || "NO CANDIDATES"; document.title = "PROBE DONE"; }
+  };
+  pc.addTransceiver("video");
+  await pc.setLocalDescription(await pc.createOffer());
+  setTimeout(() => { document.getElementById("out").textContent = out.join("\\n") || "NO CANDIDATES (timeout)"; document.title = "PROBE DONE"; }, 9000);
+})();
+</script></body></html>`;
+
 const server = http.createServer((req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
+  if (url === "/probe") { res.writeHead(200, { "Content-Type": "text/html" }); res.end(PROBE_HTML); return; }
   if (url !== "/") { res.writeHead(404); res.end("not found"); return; }
   // Only the page is public — server code and package files are never served.
   res.writeHead(200, { "Content-Type": "text/html" });

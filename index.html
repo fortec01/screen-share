@@ -93,6 +93,28 @@
   .voicebar{display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap;}
   .voicebar button{width:auto; margin-top:0; padding:9px 14px; font-size:13px;}
   .vstatus{font-size:12px; color:var(--faint);}
+  /* --- Room tools card + refreshed feature UI --- */
+  .tools{background:#fff; border:1px solid var(--line); border-radius:18px; padding:14px; margin-top:14px; display:flex; flex-direction:column; gap:12px; box-shadow:0 1px 3px rgba(16,16,20,.05);}
+  .tools .reactbar, .tools .soundbar, .tools .voicebar, .tools .drawtools, .tools .chatbox{margin-top:0;}
+  .tlabel{font-size:12px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; color:var(--faint);}
+  .soundbar{display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; align-items:stretch;}
+  .soundbar .slabel{grid-column:1 / -1;}
+  @media (min-width:560px){ .soundbar{grid-template-columns:repeat(6, 1fr);} }
+  .soundbar button.soundtile{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:auto; margin-top:0; padding:10px 2px 8px; background:#fff; border:1px solid var(--line2); border-radius:14px; font-size:11px; font-weight:600; color:var(--ink); line-height:1.15; text-align:center;}
+  .soundbar button.soundtile:hover{background:#FAFAF8; border-color:var(--line);}
+  .soundbar button.soundtile:active{transform:scale(1.07);}
+  .soundtile .chip{width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;}
+  .soundtile .chip svg{width:19px; height:19px;}
+  .reactbar{margin-top:0;}
+  .chatbox{border:1px solid var(--line); border-radius:14px; padding:10px; background:#FCFCFA;}
+  .chatrow input{border-radius:999px; padding-left:14px;}
+  .chatrow button{border-radius:50%; width:42px; height:42px; flex:none; padding:0; display:flex; align-items:center; justify-content:center;}
+  .chatrow button svg{width:18px; height:18px;}
+  .icbtn{display:inline-flex; align-items:center; gap:7px;}
+  .icbtn svg{width:16px; height:16px; flex:none;}
+  .playoverlay{position:absolute; inset:0; display:flex; flex-direction:column; gap:12px; align-items:center; justify-content:center; background:rgba(10,10,14,.45); color:#fff; font-weight:600; font-size:15px; cursor:pointer; z-index:6;}
+  .playbtn{width:66px; height:66px; border-radius:50%; background:rgba(255,255,255,.94); color:#111; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 24px rgba(0,0,0,.35);}
+  .playbtn svg{width:30px; height:30px;}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -160,22 +182,25 @@
       <div class="pointerlayer" id="hostPointerLayer"></div>
       <canvas class="drawcanvas" id="hostDrawCanvas"></canvas>
     </div>
+    <div class="tools">
+    <div class="tlabel">Reactions</div>
     <div class="reactbar" id="hostReactBar"></div>
-    <div class="soundbar" id="hostSoundBar"><span class="slabel">Sounds</span></div>
-    <div class="voicebar"><button class="ghost" id="btnVoiceHost">🎙️ Join voice</button><button class="ghost" id="btnMuteHost" style="display:none">🔊 Mic on</button><span class="vstatus" id="voiceStatusHost">Voice off — join to talk over the share</span></div>
+    <div class="soundbar" id="hostSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
+    <div class="voicebar"><button class="ghost icbtn" id="btnVoiceHost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg><span class="blabel">Join voice</span></button><button class="ghost icbtn" id="btnMuteHost" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><span class="blabel">Mic on</span></button><span class="vstatus" id="voiceStatusHost">Voice off — join to talk over the share</span></div>
     <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
-      <div class="chatrow"><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend">Send</button></div>
+      <div class="chatrow"><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+    </div>
     </div>
     <label>Send them this code — or copy the link, it carries the code with it</label>
     <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
     <label for="qualityLive">Quality — change it any time, it applies live</label>
     <select id="qualityLive">
-      <option value="auto">Auto (browser adapts)</option>
+      <option value="auto">Auto (browser adapts — can drop quality)</option>
       <option value="720p30">720p · 30 fps — light (phones, slow data)</option>
       <option value="1080p30">1080p · 30 fps</option>
-      <option value="1080p60">1080p · 60 fps — smooth</option>
+      <option value="1080p60" selected>1080p · 60 fps — smooth</option>
       <option value="1440p30">1440p · 30 fps</option>
       <option value="1440p60">1440p · 60 fps</option>
       <option value="2160p30">4K · 30 fps (strong PC + fast upload)</option>
@@ -186,31 +211,44 @@
       <option value="motion">Video — smooth motion</option>
       <option value="detail">Text — sharpest picture</option>
     </select>
-    <div class="row"><button class="ghost" id="btnPointHost">👆 Point</button><button class="ghost" id="btnDrawHost">✏️ Draw</button><button class="danger" id="btnStop">Stop sharing</button></div>
+    <div class="hint" id="qualityNote"></div>
+    <div class="row"><button class="ghost icbtn" id="btnPointHost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Point</button><button class="ghost icbtn" id="btnDrawHost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Draw</button><button class="danger" id="btnStop">Stop sharing</button></div>
     <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
   </div>
 
   <!-- GUEST STAGE -->
   <div class="stage" id="guestStage">
     <div class="videobox">
-      <video id="remoteVideo" autoplay playsinline controls></video>
+      <video id="remoteVideo" autoplay playsinline></video>
       <div class="overlay"><div class="dot wait" id="guestDot"></div><span id="guestStatus">Connecting…</span><span class="stats" id="guestStats"></span></div>
       <div class="reactlayer" id="guestReactLayer"></div>
       <div class="pointerlayer" id="guestPointerLayer"></div>
       <canvas class="drawcanvas" id="guestDrawCanvas"></canvas>
+      <div class="playoverlay" id="playOverlay" style="display:none"><span class="playbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span><span>Tap to play</span></div>
     </div>
+    <div class="tools">
+    <div class="tlabel">Reactions</div>
     <div class="reactbar" id="guestReactBar"></div>
-    <div class="soundbar" id="guestSoundBar"><span class="slabel">Sounds</span></div>
-    <div class="voicebar"><button class="ghost" id="btnVoiceGuest">🎙️ Join voice</button><button class="ghost" id="btnMuteGuest" style="display:none">🔊 Mic on</button><span class="vstatus" id="voiceStatusGuest">Voice off — join to talk over the share</span></div>
+    <div class="soundbar" id="guestSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
+    <div class="voicebar"><button class="ghost icbtn" id="btnVoiceGuest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg><span class="blabel">Join voice</span></button><button class="ghost icbtn" id="btnMuteGuest" style="display:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><span class="blabel">Mic on</span></button><span class="vstatus" id="voiceStatusGuest">Voice off — join to talk over the share</span></div>
     <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
-      <div class="chatrow"><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend">Send</button></div>
+      <div class="chatrow"><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+    </div>
+    <label for="qualityAsk">Picture quality — the sharer's computer sends it, but you can ask for more</label>
+    <select id="qualityAsk">
+      <option value="720p30">720p · 30 fps — light</option>
+      <option value="1080p30">1080p · 30 fps</option>
+      <option value="1080p60" selected>1080p · 60 fps — smooth</option>
+      <option value="1440p30">1440p · 30 fps</option>
+    </select>
+    <div class="hint" id="qualityAskNote"></div>
     </div>
     <div class="row">
-      <button class="ghost" id="btnPointGuest">👆 Point</button>
-      <button class="ghost" id="btnDrawGuest">✏️ Draw</button>
-      <button class="ghost" id="btnFull">Fullscreen</button>
+      <button class="ghost icbtn" id="btnPointGuest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Point</button>
+      <button class="ghost icbtn" id="btnDrawGuest"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>Draw</button>
+      <button class="ghost icbtn" id="btnFull"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>Fullscreen</button>
       <button class="danger" id="btnLeave">Leave</button>
     </div>
     <p class="hint">If the picture is frozen or black for more than ~20 seconds, the connection may be blocked by a strict network on one side — try a different Wi-Fi or mobile data on one end.</p>
@@ -547,13 +585,58 @@ window.addEventListener("resize", () => { if (DRAW.history.length) fitDrawCanvas
    files, and our own home-made versions (not Discord's recordings).
    Tap one and it plays on BOTH sides: yours instantly, theirs when
    the message lands. */
+const ICONS = {
+  waves: '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/>',
+  horn: '<path d="M4 10v4h3l7 5V5l-7 5H4z"/><path d="M17 9a4.2 4.2 0 0 1 0 6"/>',
+  bug: '<circle cx="12" cy="13" r="5"/><path d="M12 8V5M8.5 9L5.5 6M15.5 9l3-3M7.2 13H3.5M16.8 13h3.7M8.5 17l-3 3M15.5 17l3 3"/>',
+  sparkles: '<path d="M11 4l1.7 4.3L17 10l-4.3 1.7L11 16l-1.7-4.3L5 10l4.3-1.7L11 4z"/><path d="M18.5 15l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9.9-2.1z"/>',
+  music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+  drum: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+  star: '<path d="M12 3l2.7 5.8 6.3.7-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.7L12 3z"/>',
+  spring: '<path d="M3 7c3-2.2 15-2.2 18 0-3 2.2-15 2.2-18 0 3 2.2 15 2.2 18 0-3 2.2-15 2.2-18 0"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.2C14.4 8.4 13.3 8 12 8c-1.7 0-3 .9-3 2.1 0 2.9 6 1.5 6 4 0 1.2-1.3 2.1-3 2.1-1.3 0-2.4-.4-3-1.2"/>',
+  zap: '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>',
+  burst: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/>',
+  wind: '<path d="M9.59 4.59A2 2 0 1 1 11 8H2M12.59 19.41A2 2 0 1 0 14 16H2M17.73 7.73A2.5 2.5 0 1 1 19.5 12H2"/>',
+  bell: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  phone: '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.08 4.18 2 2 0 0 1 4.06 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>',
+  camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  drop: '<path d="M12 2.7l5.66 5.65a8 8 0 1 1-11.31 0L12 2.7z"/>',
+  xcircle: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-6 6M9 9l6 6"/>',
+  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2"/>',
+  levelup: '<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>',
+  heart: '<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>',
+  cloud: '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  thumb: '<path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>',
+  domebell: '<path d="M4 18h16M12 8a7 7 0 0 1 7 7H5a7 7 0 0 1 7-7zM12 8V6M10 4h4"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
+};
 const SOUNDBOARD = [
-  { id: "quack", label: "🦆 Quack" },
-  { id: "airhorn", label: "📯 Airhorn" },
-  { id: "cricket", label: "🦗 Cricket" },
-  { id: "clap", label: "👏 Golf clap" },
-  { id: "sadhorn", label: "🎺 Sad horn" },
-  { id: "badum", label: "🥁 Ba dum tss" },
+  { id: "quack", name: "Quack", icon: "waves", bg: "#FEF3C7", fg: "#B45309" },
+  { id: "airhorn", name: "Airhorn", icon: "horn", bg: "#FEE2E2", fg: "#B91C1C" },
+  { id: "badum", name: "Ba dum tss", icon: "drum", bg: "#FCE7F3", fg: "#BE185D" },
+  { id: "sadhorn", name: "Sad horn", icon: "music", bg: "#E0E7FF", fg: "#4338CA" },
+  { id: "cricket", name: "Cricket", icon: "bug", bg: "#DCFCE7", fg: "#15803D" },
+  { id: "clap", name: "Golf clap", icon: "sparkles", bg: "#FEF9C3", fg: "#A16207" },
+  { id: "applause", name: "Applause", icon: "thumb", bg: "#FEF3C7", fg: "#B45309" },
+  { id: "tada", name: "Ta-da!", icon: "star", bg: "#FEF3C7", fg: "#D97706" },
+  { id: "fart", name: "Fart", icon: "cloud", bg: "#ECFCCB", fg: "#4D7C0F" },
+  { id: "buzzer", name: "Wrong!", icon: "xcircle", bg: "#FEE2E2", fg: "#991B1B" },
+  { id: "coin", name: "Coin", icon: "coin", bg: "#FEF9C3", fg: "#CA8A04" },
+  { id: "levelup", name: "Level up", icon: "levelup", bg: "#DCFCE7", fg: "#16A34A" },
+  { id: "boing", name: "Boing", icon: "spring", bg: "#ECFCCB", fg: "#65A30D" },
+  { id: "laser", name: "Laser", icon: "zap", bg: "#FEE2E2", fg: "#DC2626" },
+  { id: "pop", name: "Pop", icon: "burst", bg: "#FFEDD5", fg: "#EA580C" },
+  { id: "whistle", name: "Whistle", icon: "wind", bg: "#E0F2FE", fg: "#0284C7" },
+  { id: "doorbell", name: "Doorbell", icon: "bell", bg: "#EDE9FE", fg: "#7C3AED" },
+  { id: "ringring", name: "Ring ring", icon: "phone", bg: "#D1FAE5", fg: "#059669" },
+  { id: "ding", name: "Ding", icon: "domebell", bg: "#FEF9C3", fg: "#A16207" },
+  { id: "shutter", name: "Shutter", icon: "camera", bg: "#E5E7EB", fg: "#374151" },
+  { id: "drop", name: "Water drop", icon: "drop", bg: "#DBEAFE", fg: "#2563EB" },
+  { id: "drumroll", name: "Drumroll", icon: "drum", bg: "#FCE7F3", fg: "#DB2777" },
+  { id: "scratch", name: "Scratch", icon: "disc", bg: "#E5E7EB", fg: "#111827" },
+  { id: "kiss", name: "Kiss", icon: "heart", bg: "#FCE7F3", fg: "#E11D48" },
+  { id: "wah", name: "Wah wah", icon: "sliders", bg: "#EDE9FE", fg: "#6D28D9" },
 ];
 let AC = null;
 function audio(){
@@ -613,13 +696,71 @@ function playSound(name){
     blip(ac, master, t, 160, 75, 0.13, "sine", 0.8);
     blip(ac, master, t + 0.17, 150, 70, 0.13, "sine", 0.8);
     noiseHit(ac, master, t + 0.34, 0.5, 6000, 0.22, "highpass");
+  } else if (name === "applause") {
+    for (let i = 0; i < 16; i++)
+      noiseHit(ac, master, t + Math.random() * 1.25, 0.05, 1400, 0.09, "bandpass");
+  } else if (name === "tada") {
+    [523, 659, 784].forEach((fr, i) => blip(ac, master, t + i * 0.09, fr, fr, 0.16, "sawtooth", 0.22));
+    blip(ac, master, t + 0.3, 1047, 1047, 0.45, "sawtooth", 0.26);
+  } else if (name === "fart") {
+    blip(ac, master, t, 105, 42, 0.4, "square", 0.4);
+  } else if (name === "buzzer") {
+    blip(ac, master, t, 130, 128, 0.45, "square", 0.35);
+  } else if (name === "coin") {
+    blip(ac, master, t, 988, 988, 0.07, "square", 0.2);
+    blip(ac, master, t + 0.07, 1319, 1319, 0.32, "square", 0.2);
+  } else if (name === "levelup") {
+    [523, 659, 784, 1047, 1319].forEach((fr, i) => blip(ac, master, t + i * 0.07, fr, fr, 0.14, "square", 0.18));
+  } else if (name === "boing") {
+    blip(ac, master, t, 160, 640, 0.16, "sine", 0.5);
+    blip(ac, master, t + 0.16, 640, 170, 0.24, "sine", 0.45);
+  } else if (name === "laser") {
+    blip(ac, master, t, 1500, 120, 0.18, "sawtooth", 0.3);
+    blip(ac, master, t + 0.22, 1500, 120, 0.18, "sawtooth", 0.3);
+  } else if (name === "pop") {
+    blip(ac, master, t, 480, 140, 0.07, "sine", 0.6);
+    noiseHit(ac, master, t, 0.03, 2000, 0.2, "bandpass");
+  } else if (name === "whistle") {
+    blip(ac, master, t, 900, 1750, 0.35, "sine", 0.22);
+  } else if (name === "doorbell") {
+    blip(ac, master, t, 659, 659, 0.35, "sine", 0.3);
+    blip(ac, master, t + 0.36, 523, 523, 0.55, "sine", 0.3);
+  } else if (name === "ringring") {
+    for (let r = 0; r < 2; r++)
+      for (let i = 0; i < 6; i++)
+        blip(ac, master, t + r * 0.55 + i * 0.07, i % 2 ? 1318 : 1046, i % 2 ? 1318 : 1046, 0.045, "sine", 0.2);
+  } else if (name === "ding") {
+    blip(ac, master, t, 1568, 1568, 0.8, "sine", 0.28);
+  } else if (name === "shutter") {
+    noiseHit(ac, master, t, 0.03, 3000, 0.5, "highpass");
+    noiseHit(ac, master, t + 0.09, 0.04, 3000, 0.45, "highpass");
+  } else if (name === "drop") {
+    blip(ac, master, t, 950, 320, 0.12, "sine", 0.35);
+    blip(ac, master, t + 0.17, 950, 320, 0.1, "sine", 0.14);
+  } else if (name === "drumroll") {
+    let when = 0, gap = 0.075;
+    for (let i = 0; i < 14; i++) { noiseHit(ac, master, t + when, 0.04, 1800, 0.13, "bandpass"); when += gap; gap = Math.max(0.03, gap * 0.88); }
+    noiseHit(ac, master, t + when + 0.05, 0.25, 1500, 0.3, "bandpass");
+  } else if (name === "scratch") {
+    noiseHit(ac, master, t, 0.13, 900, 0.4, "bandpass");
+    noiseHit(ac, master, t + 0.15, 0.13, 2400, 0.4, "bandpass");
+    noiseHit(ac, master, t + 0.3, 0.1, 900, 0.35, "bandpass");
+  } else if (name === "kiss") {
+    noiseHit(ac, master, t, 0.05, 1200, 0.4, "bandpass");
+    blip(ac, master, t, 700, 300, 0.05, "sine", 0.2);
+    noiseHit(ac, master, t + 0.16, 0.05, 1200, 0.4, "bandpass");
+  } else if (name === "wah") {
+    blip(ac, master, t, 180, 330, 0.16, "sawtooth", 0.24);
+    blip(ac, master, t + 0.17, 330, 180, 0.16, "sawtooth", 0.24);
+    blip(ac, master, t + 0.34, 180, 300, 0.3, "sawtooth", 0.22);
   }
 }
 document.querySelectorAll(".soundbar").forEach(bar => {
   SOUNDBOARD.forEach(s => {
     const b = document.createElement("button");
     b.type = "button";
-    b.textContent = s.label;
+    b.className = "soundtile";
+    b.innerHTML = `<span class="chip" style="background:${s.bg}; color:${s.fg}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[s.icon] || ""}</svg></span><span>${s.name}</span>`;
     b.onclick = () => { playSound(s.id); send({ type: "sound", name: s.id }); };
     bar.appendChild(b);
   });
@@ -699,9 +840,9 @@ async function joinVoice(){
   vMuted = false;
   stream.getAudioTracks().forEach(tr => { tr.contentHint = "speech"; });
   const els = voiceEls();
-  els.join.textContent = "📴 Leave voice";
+  els.join.querySelector(".blabel").textContent = "Leave voice";
   els.mute.style.display = "";
-  els.mute.textContent = "🔊 Mic on";
+  els.mute.querySelector(".blabel").textContent = "Mic on";
   setVoiceStatus("Voice connecting…");
   if (!vpc) {
     newVoicePeer();
@@ -727,7 +868,7 @@ function leaveVoice(sendIt){
   vRemoteReady = false;
   const els = voiceEls();
   if (els.join) {
-    els.join.textContent = "🎙️ Join voice";
+    els.join.querySelector(".blabel").textContent = "Join voice";
     els.mute.style.display = "none";
   }
   setVoiceStatus("Voice off — join to talk over the share");
@@ -739,7 +880,7 @@ function toggleMute(){
   if (!vStream) return;
   vMuted = !vMuted;
   vStream.getAudioTracks().forEach(tr => { tr.enabled = !vMuted; });
-  voiceEls().mute.textContent = vMuted ? "🔇 Muted" : "🔊 Mic on";
+  voiceEls().mute.querySelector(".blabel").textContent = vMuted ? "Muted" : "Mic on";
 }
 [["btnVoiceHost", "btnMuteHost"], ["btnVoiceGuest", "btnMuteGuest"]].forEach(([j, m]) => {
   $(j).onclick = () => { if (vJoined) leaveVoice(true); else joinVoice(); };
@@ -820,12 +961,20 @@ function tuneSender(stream){
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
     if (q) {
       p.encodings[0].maxBitrate = q.br; p.encodings[0].maxFramerate = q.fps;
+      /* Bitrate floor: without one, the estimator can starve the
+         stream to near-zero on a bad relay minute and never climb
+         back. A floor at ~35% of the tier keeps the picture alive. */
+      p.encodings[0].minBitrate = Math.floor(q.br * 0.35);
       /* Hold the chosen resolution: without this, Chrome's bandwidth
          estimator shrinks the picture hard on relay paths (it can drop
          to 320x180 in the first minute). With it pinned, the browser
          adapts bitrate/fps instead of the picture size. */
       p.encodings[0].scaleResolutionDownBy = 1;
     } else {
+      /* Auto still gets a floor and a sane ceiling, so "auto" can
+         adapt without collapsing to a thumbnail. */
+      p.encodings[0].maxBitrate = 25_000_000;
+      p.encodings[0].minBitrate = 1_000_000;
       delete p.encodings[0].scaleResolutionDownBy;
     }
     p.degradationPreference = motion ? "maintain-framerate" : "maintain-resolution";
@@ -975,6 +1124,14 @@ async function startSharing(){
     "voice-ice": async msg => { if (!msg.candidate) return; if (vpc && vRemoteReady) { try { await vpc.addIceCandidate(msg.candidate); } catch {} } else vIceQueue.push(msg.candidate); },
     "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
     "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
+    "want-quality": msg => {
+      if (!QUALITY[msg.preset]) return;
+      $("qualityLive").value = msg.preset;
+      if (localStream) tuneSender(localStream);
+      const note = $("qualityNote");
+      note.textContent = "Your viewer asked for " + msg.preset.replace("p", "p · ") + " — applied.";
+      setTimeout(() => { if (note.textContent.startsWith("Your viewer")) note.textContent = ""; }, 6000);
+    },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -1039,7 +1196,17 @@ async function startWatching(){
   await loadIce();
   newPeer();
   const myPc = pc;
-  pc.ontrack = e => { $("remoteVideo").srcObject = e.streams[0]; tuneReceivers(); };
+  pc.ontrack = e => {
+    const v = $("remoteVideo");
+    v.srcObject = e.streams[0];
+    tuneReceivers();
+    /* Mobile browsers often refuse autoplay until a tap: try to
+       play, and if the video is still paused shortly after, show
+       our own Tap to play overlay instead of the browser's
+       native controls bar. */
+    v.play().catch(() => {});
+    setTimeout(() => { if (v.paused && v.srcObject) $("playOverlay").style.display = "flex"; }, 700);
+  };
   pc.onconnectionstatechange = () => {
     if (pc !== myPc) return; // a newer connection owns the status now
     window.__pcState = myPc.connectionState;
@@ -1075,7 +1242,14 @@ async function startWatching(){
 }
 $("btnWatch").onclick = startWatching;
 $("btnLeave").onclick = () => location.href = location.pathname;
-$("btnFull").onclick = () => { const v = $("remoteVideo"); if (v.requestFullscreen) v.requestFullscreen(); };
+$("btnFull").onclick = () => { const box = $("remoteVideo").parentElement; if (box.requestFullscreen) box.requestFullscreen(); else if ($("remoteVideo").requestFullscreen) $("remoteVideo").requestFullscreen(); };
+$("playOverlay").onclick = () => { const v = $("remoteVideo"); v.play().then(() => { $("playOverlay").style.display = "none"; }).catch(() => {}); };
+$("remoteVideo").addEventListener("playing", () => { $("playOverlay").style.display = "none"; });
+$("qualityAsk").onchange = () => {
+  const preset = $("qualityAsk").value;
+  send({ type: "want-quality", preset });
+  $("qualityAskNote").textContent = "Asked the sharer for " + preset.replace("p", "p · ") + " — it applies on their side right away.";
+};
 
 /* Automated end-to-end test entry points. */
 if (TEST && params.get("room")) startWatching();

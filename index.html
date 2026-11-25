@@ -122,6 +122,22 @@
     </div>
     <label>Send them this code — or copy the link, it carries the code with it</label>
     <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
+    <label for="qualityLive">Quality — change it any time, it applies live</label>
+    <select id="qualityLive">
+      <option value="auto">Auto (browser adapts)</option>
+      <option value="720p30">720p · 30 fps — light (phones, slow data)</option>
+      <option value="1080p30">1080p · 30 fps</option>
+      <option value="1080p60">1080p · 60 fps — smooth</option>
+      <option value="1440p30">1440p · 30 fps</option>
+      <option value="1440p60">1440p · 60 fps</option>
+      <option value="2160p30">4K · 30 fps (strong PC + fast upload)</option>
+      <option value="2160p60">4K · 60 fps (very fast upload)</option>
+    </select>
+    <label for="modeLive">Watching</label>
+    <select id="modeLive">
+      <option value="motion">Video — smooth motion</option>
+      <option value="detail">Text — sharpest picture</option>
+    </select>
     <div class="row"><button class="danger" id="btnStop">Stop sharing</button></div>
     <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
   </div>
@@ -229,10 +245,12 @@ function preferCodecs(transceiver){
 }
 
 function tuneSender(stream){
-  const q = QUALITY[$("quality").value];
+  /* Reads the LIVE selects on the host stage, so changing quality
+     mid-share re-tunes the running stream without a restart. */
+  const q = QUALITY[$("qualityLive").value];
   const track = stream.getVideoTracks()[0];
   if (!track) return;
-  const motion = $("mode").value === "motion";
+  const motion = $("modeLive").value === "motion";
   try { track.contentHint = motion ? "motion" : "detail"; } catch {}
   if (q) {
     track.applyConstraints({ width:{max:q.w}, height:{max:q.h}, frameRate:{max:q.fps} }).catch(()=>{});
@@ -242,11 +260,20 @@ function tuneSender(stream){
     if (!sender) return;
     const p = sender.getParameters();
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-    if (q) { p.encodings[0].maxBitrate = q.br; p.encodings[0].maxFramerate = q.fps; }
+    if (q) {
+      p.encodings[0].maxBitrate = q.br; p.encodings[0].maxFramerate = q.fps;
+      /* Hold the chosen resolution: without this, Chrome's bandwidth
+         estimator shrinks the picture hard on relay paths (it can drop
+         to 320x180 in the first minute). With it pinned, the browser
+         adapts bitrate/fps instead of the picture size. */
+      p.encodings[0].scaleResolutionDownBy = 1;
+    } else {
+      delete p.encodings[0].scaleResolutionDownBy;
+    }
     p.degradationPreference = motion ? "maintain-framerate" : "maintain-resolution";
     sender.setParameters(p).catch(()=>{});
   };
-  setTimeout(apply, 400); setTimeout(apply, 1500);
+  apply(); setTimeout(apply, 400); setTimeout(apply, 1500); setTimeout(apply, 4000);
 }
 
 /* Low-latency playback on the receiving side. */
@@ -314,10 +341,17 @@ function makeTestStream(){
 /* ---------- HOST ---------- */
 async function startSharing(){
   $("shareErr").textContent = "";
+  /* The live (host-stage) selects mirror the home picks from here on,
+     and tuneSender reads them — so mid-share changes apply live. */
+  $("qualityLive").value = $("quality").value;
+  $("modeLive").value = $("mode").value;
+  const q0 = QUALITY[$("quality").value];
   try {
     localStream = TEST ? makeTestStream()
       : await navigator.mediaDevices.getDisplayMedia({
-          video: { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" },
+          video: q0
+            ? { width: { ideal: q0.w }, height: { ideal: q0.h }, frameRate: { ideal: q0.fps, max: q0.fps }, resizeMode: "none" }
+            : { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" },
           audio: true
         });
   } catch {
@@ -378,6 +412,8 @@ async function startSharing(){
   ws.onopen = () => send({ type:"create" });
 }
 $("btnShare").onclick = startSharing;
+$("qualityLive").onchange = () => { if (localStream) tuneSender(localStream); };
+$("modeLive").onchange = () => { if (localStream) tuneSender(localStream); };
 
 /* ---------- PHONES ---------- */
 /* One rule for every phone: never offer a Share button that cannot

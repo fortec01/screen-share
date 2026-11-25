@@ -32,10 +32,22 @@ const TURN_URLS = [
 const CF_TURN_KEY_ID = process.env.CF_TURN_KEY_ID || "";
 const CF_TURN_TOKEN = process.env.CF_TURN_TOKEN || "";
 
+// Second relay: ExpressTURN free plan — fixed long-term credentials from
+// the account dashboard, kept only in this service's env. Included
+// alongside the others so browsers can use whichever relay answers.
+const ET_TURN_USERNAME = process.env.ET_TURN_USERNAME || "";
+const ET_TURN_CREDENTIAL = process.env.ET_TURN_CREDENTIAL || "";
+const ET_TURN_URLS = (process.env.ET_TURN_URLS || "turn:free.expressturn.com:3478?transport=udp,turn:free.expressturn.com:3478?transport=tcp")
+  .split(",").map(s => s.trim()).filter(Boolean);
+
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
   if (url === "/turn") {
+    // Return EVERY configured relay; the browser tries them all and uses
+    // whichever answers. Order = preference: Cloudflare, ExpressTURN,
+    // then the self-hosted VPS relay.
+    const servers = [];
     if (CF_TURN_KEY_ID && CF_TURN_TOKEN) {
       try {
         const r = await fetch("https://rtc.live.cloudflare.com/v1/turn/keys/" + CF_TURN_KEY_ID + "/credentials/generate", {
@@ -47,17 +59,22 @@ const server = http.createServer(async (req, res) => {
         if (r.ok) {
           const data = await r.json();
           const ice = data.iceServers || {};
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ urls: ice.urls, username: ice.username, credential: ice.credential }));
-          return;
+          if (ice.urls) servers.push({ urls: ice.urls, username: ice.username, credential: ice.credential });
         }
-      } catch (e) { /* fall through to the self-hosted relay */ }
+      } catch (e) { /* skip Cloudflare, keep the other relays */ }
     }
-    if (!TURN_SECRET) { res.writeHead(503); res.end("turn not configured"); return; }
-    const username = String(Math.floor(Date.now() / 1000) + 3600);
-    const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
+    if (ET_TURN_USERNAME && ET_TURN_CREDENTIAL) {
+      servers.push({ urls: ET_TURN_URLS, username: ET_TURN_USERNAME, credential: ET_TURN_CREDENTIAL });
+    }
+    if (TURN_SECRET) {
+      const username = String(Math.floor(Date.now() / 1000) + 3600);
+      const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
+      servers.push({ urls: TURN_URLS, username, credential });
+    }
+    if (!servers.length) { res.writeHead(503); res.end("turn not configured"); return; }
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ urls: TURN_URLS, username, credential }));
+    // Top-level fields mirror the first server, for older cached pages.
+    res.end(JSON.stringify({ servers, urls: servers[0].urls, username: servers[0].username, credential: servers[0].credential }));
     return;
   }
   if (url !== "/") { res.writeHead(404); res.end("not found"); return; }

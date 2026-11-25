@@ -49,6 +49,8 @@ const ET5_TURN_USERNAME = process.env.ET5_TURN_USERNAME || "";
 const ET5_TURN_CREDENTIAL = process.env.ET5_TURN_CREDENTIAL || "";
 const ET6_TURN_USERNAME = process.env.ET6_TURN_USERNAME || "";
 const ET6_TURN_CREDENTIAL = process.env.ET6_TURN_CREDENTIAL || "";
+const ET7_TURN_USERNAME = process.env.ET7_TURN_USERNAME || "";
+const ET7_TURN_CREDENTIAL = process.env.ET7_TURN_CREDENTIAL || "";
 const ET_TURN_URLS = (process.env.ET_TURN_URLS || "turn:free.expressturn.com:3478?transport=udp,turn:free.expressturn.com:3478?transport=tcp")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -98,6 +100,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (ET6_TURN_USERNAME && ET6_TURN_CREDENTIAL) {
       etEntries.push({ urls: ET_TURN_URLS, username: ET6_TURN_USERNAME, credential: ET6_TURN_CREDENTIAL });
+    }
+    if (ET7_TURN_USERNAME && ET7_TURN_CREDENTIAL) {
+      etEntries.push({ urls: ET_TURN_URLS, username: ET7_TURN_USERNAME, credential: ET7_TURN_CREDENTIAL });
     }
     if (etEntries.length) {
       turnCounter += 1;

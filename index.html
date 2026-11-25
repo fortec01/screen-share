@@ -64,6 +64,7 @@
   .hint{color:var(--muted); font-size:13px; line-height:1.6; margin-top:14px;}
   .hint b{color:var(--text);}
   .err{color:var(--danger); font-size:14px; margin-top:10px; min-height:18px;}
+  .note{background:#EEF0FE; border:1px solid rgba(79,70,229,.25); color:#33335C; font-size:14px; line-height:1.55; border-radius:10px; padding:12px 14px; margin-top:14px;}
   .footline{text-align:center; color:#A3A3A8; font-size:12.5px; margin-top:38px; letter-spacing:.2px;}
   footer{color:#A3A3A8; font-size:12.5px; margin-top:12px; line-height:1.65; text-align:center; max-width:620px; margin-left:auto; margin-right:auto;}
 </style>
@@ -87,6 +88,7 @@
       <label for="quality">Quality</label>
       <select id="quality">
         <option value="auto">Auto (browser adapts)</option>
+        <option value="720p30">720p · 30 fps — light (phones, slow data)</option>
         <option value="1080p30">1080p · 30 fps</option>
         <option value="1080p60" selected>1080p · 60 fps — smooth</option>
         <option value="1440p30">1440p · 30 fps</option>
@@ -172,6 +174,7 @@ async function loadIce(){
 const TEST = new URLSearchParams(location.search).get("test") === "1";
 
 const QUALITY = {
+  "720p30": { w:1280, h:720, fps:30, br:4_000_000 },
   "1080p30": { w:1920, h:1080, fps:30, br:8_000_000 },
   "1080p60": { w:1920, h:1080, fps:60, br:12_000_000 },
   "1440p30": { w:2560, h:1440, fps:30, br:20_000_000 },
@@ -317,7 +320,12 @@ async function startSharing(){
           video: { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" },
           audio: true
         });
-  } catch { $("shareErr").textContent = "Screen pick was cancelled, or this browser can't share (use Chrome/Edge on a computer)."; return; }
+  } catch {
+    $("shareErr").textContent = (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
+      ? "Screen pick was cancelled — tap Start sharing and choose a screen to try again."
+      : "This browser can't share its screen (see the note above).";
+    return;
+  }
   $("home").style.display = "none";
   $("hostStage").classList.add("on");
   $("localVideo").srcObject = localStream;
@@ -370,6 +378,30 @@ async function startSharing(){
   ws.onopen = () => send({ type:"create" });
 }
 $("btnShare").onclick = startSharing;
+
+/* ---------- PHONES ---------- */
+/* One rule for every phone: default to the light 720p tier, and if the
+   browser has no screen capture at all, say so up front with the way
+   out — instead of letting the tap fail into a red error. */
+const IS_PHONE = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 500
+  || /Android|iPhone|iPad/i.test(navigator.userAgent);
+const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+if (IS_PHONE) $("quality").value = "720p30";
+if (!CAN_SHARE) {
+  const ua = navigator.userAgent;
+  const msg = /iPhone|iPad/.test(ua)
+    ? "This iPhone/iPad browser can't share its screen — no iOS browser can. Watching works great below, or share from a computer."
+    : /Android/.test(ua)
+      ? "This browser can't share its screen. On Android, Firefox can — open this page in Firefox to share from your phone. Watching works great below."
+      : "This browser can't share its screen. Try Chrome or Edge on a computer — watching works great below.";
+  $("btnShare").style.display = "none";
+  $("quality").style.display = "none";
+  $("mode").style.display = "none";
+  document.querySelectorAll("label[for=quality], label[for=mode]").forEach(l => l.style.display = "none");
+  const note = $("shareErr");
+  note.className = "note";
+  note.textContent = msg;
+}
 
 function stopSharing(){
   if (localStream) localStream.getTracks().forEach(t => t.stop());

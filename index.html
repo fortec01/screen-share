@@ -257,6 +257,7 @@
   <div class="footline">End-to-end encrypted · Up to 4K · 60 fps · View-only</div>
   <footer>
     How it works: your browsers find each other through a tiny introductions server, then the screen flows directly between them (WebRTC). Quality is capped by the sharing computer and the upload speed — 1080p60 ≈ 12 Mbps, 1440p60 ≈ 32 Mbps, 4K30 ≈ 45 Mbps of upload.
+    <br>Soundboard effects are real recordings under CC0 / public-domain / CC BY licences — full credits in SOUNDS-CREDITS.md in the project repo.
   </footer>
 </div>
 
@@ -581,10 +582,11 @@ $("guestDrawClear").onclick = () => clearDraw(true);
 window.addEventListener("resize", () => { if (DRAW.history.length) fitDrawCanvas(); });
 
 /* ---------- SOUNDBOARD ---------- */
-/* The six classic sounds, synthesised live with WebAudio — no audio
-   files, and our own home-made versions (not Discord's recordings).
-   Tap one and it plays on BOTH sides: yours instantly, theirs when
-   the message lands. */
+/* Real recordings (CC0 / public domain / CC BY — see SOUNDS-CREDITS.md),
+   served from /sounds/<id>.mp3. Tap one and it plays on BOTH sides:
+   yours instantly, theirs when the message lands. If a file fails to
+   load or the browser refuses to play it, the original WebAudio synth
+   recipe for that sound runs instead, so a tap is never silent. */
 const ICONS = {
   waves: '<path d="M11 5L6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.4 5.6a9 9 0 0 1 0 12.8"/>',
   horn: '<path d="M4 10v4h3l7 5V5l-7 5H4z"/><path d="M17 9a4.2 4.2 0 0 1 0 6"/>',
@@ -638,6 +640,14 @@ const SOUNDBOARD = [
   { id: "kiss", name: "Kiss", icon: "heart", bg: "#FCE7F3", fg: "#E11D48" },
   { id: "wah", name: "Wah wah", icon: "sliders", bg: "#EDE9FE", fg: "#6D28D9" },
 ];
+/* Sounds that have a real recording in /sounds/. "kiss" is the only
+   one without — no freely-licensed recording of it could be found. */
+const REAL_SOUNDS = new Set([
+  "quack", "airhorn", "badum", "sadhorn", "cricket", "clap", "applause",
+  "tada", "fart", "buzzer", "coin", "levelup", "boing", "laser", "pop",
+  "whistle", "doorbell", "ringring", "ding", "shutter", "drop",
+  "drumroll", "scratch", "wah",
+]);
 let AC = null;
 function audio(){
   if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
@@ -645,6 +655,18 @@ function audio(){
   return AC;
 }
 document.addEventListener("pointerdown", () => { try { audio(); } catch (e) {} });
+/* Prime an <audio> element on the first tap so later programmatic
+   playback of the real files is allowed by autoplay policies. */
+let primeAudio = null;
+document.addEventListener("pointerdown", () => {
+  if (!primeAudio) {
+    primeAudio = new Audio("sounds/ding.mp3");
+    primeAudio.volume = 0;
+  }
+  if (primeAudio.paused) {
+    primeAudio.play().then(() => { primeAudio.pause(); primeAudio.currentTime = 0; }).catch(() => {});
+  }
+}, { passive: true });
 function blip(ac, dest, when, f0, f1, dur, type, gain){
   const o = ac.createOscillator(), g = ac.createGain();
   o.type = type;
@@ -670,6 +692,18 @@ function noiseHit(ac, dest, when, dur, freq, gain, type){
   src.start(when);
 }
 function playSound(name){
+  if (!REAL_SOUNDS.has(name)) { playSynth(name); return; }
+  let fellBack = false;
+  const fall = () => { if (!fellBack) { fellBack = true; playSynth(name); } };
+  try {
+    const a = new Audio("sounds/" + name + ".mp3");
+    a.volume = 0.9;
+    a.addEventListener("error", fall, { once: true });
+    const p = a.play();
+    if (p && typeof p.catch === "function") p.catch(fall);
+  } catch (e) { fall(); }
+}
+function playSynth(name){
   let ac;
   try { ac = audio(); } catch (e) { return; }
   const t = ac.currentTime + 0.03;

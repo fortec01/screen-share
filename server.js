@@ -119,6 +119,23 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ servers, urls: servers[0].urls, username: servers[0].username, credential: servers[0].credential }));
     return;
   }
+  if (url.startsWith("/sounds/")) {
+    // Soundboard recordings (see SOUNDS-CREDITS.md). Only plain
+    // lowercase mp3 names are allowed — no paths, no traversal.
+    const name = url.slice("/sounds/".length);
+    if (!/^[a-z0-9-]+\.mp3$/.test(name)) { res.writeHead(404); res.end("not found"); return; }
+    const file = path.join(PUBLIC, "sounds", name);
+    fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) { res.writeHead(404); res.end("not found"); return; }
+      res.writeHead(200, {
+        "Content-Type": "audio/mpeg",
+        "Content-Length": st.size,
+        "Cache-Control": "public, max-age=86400",
+      });
+      fs.createReadStream(file).pipe(res);
+    });
+    return;
+  }
   if (url !== "/") { res.writeHead(404); res.end("not found"); return; }
   // Only the page is public — server code and package files are never served.
   res.writeHead(200, { "Content-Type": "text/html" });

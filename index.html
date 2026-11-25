@@ -78,6 +78,13 @@
   @keyframes pulseRing{from{transform:scale(.3); opacity:1;} to{transform:scale(1.5); opacity:0;}}
   .videobox.pointing{cursor:crosshair;}
   button.ghost.on{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .drawcanvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none;}
+  .videobox.drawing{cursor:crosshair;}
+  .drawtools{display:none; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap;}
+  .drawtools.on{display:flex;}
+  .drawtools .swatch{width:30px; height:30px; border-radius:50%; border:2px solid var(--line2); margin-top:0; padding:0;}
+  .drawtools .swatch.on{border-color:var(--ink); transform:scale(1.14);}
+  .drawtools .clearbtn{width:auto; margin-top:0; padding:8px 14px; font-size:13px;}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -143,8 +150,10 @@
       <div class="overlay"><div class="dot wait" id="hostDot"></div><span id="hostStatus">Waiting for your viewer to join…</span><span class="stats" id="hostStats"></span></div>
       <div class="reactlayer" id="hostReactLayer"></div>
       <div class="pointerlayer" id="hostPointerLayer"></div>
+      <canvas class="drawcanvas" id="hostDrawCanvas"></canvas>
     </div>
     <div class="reactbar" id="hostReactBar"></div>
+    <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
       <div class="chatrow"><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend">Send</button></div>
@@ -167,7 +176,7 @@
       <option value="motion">Video — smooth motion</option>
       <option value="detail">Text — sharpest picture</option>
     </select>
-    <div class="row"><button class="ghost" id="btnPointHost">👆 Point</button><button class="danger" id="btnStop">Stop sharing</button></div>
+    <div class="row"><button class="ghost" id="btnPointHost">👆 Point</button><button class="ghost" id="btnDrawHost">✏️ Draw</button><button class="danger" id="btnStop">Stop sharing</button></div>
     <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
   </div>
 
@@ -178,14 +187,17 @@
       <div class="overlay"><div class="dot wait" id="guestDot"></div><span id="guestStatus">Connecting…</span><span class="stats" id="guestStats"></span></div>
       <div class="reactlayer" id="guestReactLayer"></div>
       <div class="pointerlayer" id="guestPointerLayer"></div>
+      <canvas class="drawcanvas" id="guestDrawCanvas"></canvas>
     </div>
     <div class="reactbar" id="guestReactBar"></div>
+    <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
       <div class="chatrow"><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend">Send</button></div>
     </div>
     <div class="row">
       <button class="ghost" id="btnPointGuest">👆 Point</button>
+      <button class="ghost" id="btnDrawGuest">✏️ Draw</button>
       <button class="ghost" id="btnFull">Fullscreen</button>
       <button class="danger" id="btnLeave">Leave</button>
     </div>
@@ -376,6 +388,146 @@ function bindPointer(btnId, videoId){
 }
 bindPointer("btnPointHost", "localVideo");
 bindPointer("btnPointGuest", "remoteVideo");
+
+/* ---------- DRAWING ---------- */
+/* A shared whiteboard over the picture. Strokes are sent as small
+   segments in picture-fraction coordinates and drawn on a canvas on
+   the other side as they arrive. Strokes stay until Clear; nothing
+   is stored anywhere. Like the pointer, it marks the picture inside
+   ScreenShare only. */
+const DRAW_COLORS = ["#FF3B30", "#FFCC00", "#34C759", "#0A84FF", "#FFFFFF"];
+const DRAW = { on: false, color: DRAW_COLORS[0], strokeId: null, last: null, history: [], remote: new Map() };
+function myDrawCanvas(){
+  return $("hostStage").classList.contains("on") ? $("hostDrawCanvas") : $("guestDrawCanvas");
+}
+function fitDrawCanvas(){
+  const c = myDrawCanvas();
+  if (!c) return;
+  const r = c.parentElement.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  c.width = Math.max(2, Math.round(r.width * dpr));
+  c.height = Math.max(2, Math.round(r.height * dpr));
+  c.dataset.fit = "1";
+  repaintDraw();
+}
+function drawSeg(c, color, x1, y1, x2, y2){
+  const ctx = c.getContext("2d");
+  ctx.strokeStyle = color;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(2, c.width / 320);
+  ctx.beginPath();
+  ctx.moveTo(x1 * c.width, y1 * c.height);
+  ctx.lineTo(x2 * c.width, y2 * c.height);
+  ctx.stroke();
+}
+function repaintDraw(){
+  const c = myDrawCanvas();
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  ctx.clearRect(0, 0, c.width, c.height);
+  for (const s of DRAW.history) {
+    if (s.pts.length === 1) drawSeg(c, s.color, s.pts[0][0], s.pts[0][1], s.pts[0][0], s.pts[0][1]);
+    for (let i = 1; i < s.pts.length; i++)
+      drawSeg(c, s.color, s.pts[i - 1][0], s.pts[i - 1][1], s.pts[i][0], s.pts[i][1]);
+  }
+}
+function clearDraw(sendIt){
+  DRAW.history = [];
+  DRAW.remote.clear();
+  const c = myDrawCanvas();
+  if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
+  if (sendIt) send({ type: "draw-clear" });
+}
+function receiveDraw(msg){
+  const c = myDrawCanvas();
+  if (!c) return;
+  if (!c.dataset.fit) fitDrawCanvas();
+  if (msg.ev === "start" && DRAW_COLORS.includes(msg.color)
+      && typeof msg.x === "number" && typeof msg.y === "number") {
+    DRAW.remote.set(msg.id, { color: msg.color });
+    DRAW.history.push({ color: msg.color, pts: [[msg.x, msg.y]] });
+    if (DRAW.history.length > 300) DRAW.history.shift();
+    drawSeg(c, msg.color, msg.x, msg.y, msg.x, msg.y);
+  } else if (msg.ev === "seg") {
+    const s = DRAW.remote.get(msg.id);
+    if (!s) return;
+    if ([msg.x1, msg.y1, msg.x2, msg.y2].some(v => typeof v !== "number")) return;
+    drawSeg(c, s.color, msg.x1, msg.y1, msg.x2, msg.y2);
+    const h = DRAW.history[DRAW.history.length - 1];
+    if (h) h.pts.push([msg.x2, msg.y2]);
+  } else if (msg.ev === "end") {
+    DRAW.remote.delete(msg.id);
+  }
+}
+function bindDraw(btnId, toolsId, videoId){
+  const btn = $(btnId), tools = $(toolsId), video = $(videoId), box = video.parentElement;
+  for (let i = DRAW_COLORS.length - 1; i >= 0; i--) {
+    const col = DRAW_COLORS[i];
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.className = "swatch";
+    sw.dataset.color = col;
+    sw.style.background = col;
+    sw.onclick = () => {
+      DRAW.color = col;
+      tools.querySelectorAll(".swatch").forEach(s2 => s2.classList.toggle("on", s2 === sw));
+    };
+    tools.prepend(sw);
+  }
+  const firstSw = tools.querySelector(".swatch");
+  if (firstSw) firstSw.classList.add("on");
+  btn.onclick = () => {
+    DRAW.on = !DRAW.on;
+    btn.classList.toggle("on", DRAW.on);
+    tools.classList.toggle("on", DRAW.on);
+    box.classList.toggle("drawing", DRAW.on);
+    if (DRAW.on) fitDrawCanvas();
+  };
+  const pos = e => {
+    const r = video.getBoundingClientRect();
+    return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  };
+  let lastMove = 0;
+  box.addEventListener("pointerdown", e => {
+    if (!DRAW.on) return;
+    const p = pos(e);
+    if (p[0] < 0 || p[0] > 1 || p[1] < 0 || p[1] > 1) return;
+    DRAW.strokeId = Date.now() + "-" + Math.floor(Math.random() * 1e6);
+    DRAW.last = p;
+    DRAW.history.push({ color: DRAW.color, pts: [p] });
+    if (DRAW.history.length > 300) DRAW.history.shift();
+    drawSeg(myDrawCanvas(), DRAW.color, p[0], p[1], p[0], p[1]);
+    send({ type: "draw", ev: "start", id: DRAW.strokeId, color: DRAW.color, x: p[0], y: p[1] });
+  });
+  box.addEventListener("pointermove", e => {
+    if (!DRAW.on || !DRAW.strokeId) return;
+    const now = performance.now();
+    if (now - lastMove < 25) return;
+    lastMove = now;
+    const p = pos(e);
+    if (p[0] < 0 || p[0] > 1 || p[1] < 0 || p[1] > 1) return;
+    const from = DRAW.last;
+    DRAW.last = p;
+    DRAW.history[DRAW.history.length - 1].pts.push(p);
+    drawSeg(myDrawCanvas(), DRAW.color, from[0], from[1], p[0], p[1]);
+    send({ type: "draw", ev: "seg", id: DRAW.strokeId, x1: from[0], y1: from[1], x2: p[0], y2: p[1] });
+  });
+  const endStroke = () => {
+    if (DRAW.strokeId) {
+      send({ type: "draw", ev: "end", id: DRAW.strokeId });
+      DRAW.strokeId = null;
+      DRAW.last = null;
+    }
+  };
+  box.addEventListener("pointerup", endStroke);
+  box.addEventListener("pointerleave", endStroke);
+}
+bindDraw("btnDrawHost", "hostDrawTools", "localVideo");
+bindDraw("btnDrawGuest", "guestDrawTools", "remoteVideo");
+$("hostDrawClear").onclick = () => clearDraw(true);
+$("guestDrawClear").onclick = () => clearDraw(true);
+window.addEventListener("resize", () => { if (DRAW.history.length) fitDrawCanvas(); });
 
 function newPeer(){
   if (pc) { try { pc.close(); } catch {} pc = null; }
@@ -574,6 +726,8 @@ async function startSharing(){
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
     chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
+    draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
+    "draw-clear": () => clearDraw(false),
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -659,6 +813,8 @@ async function startWatching(){
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
     chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
+    draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
+    "draw-clear": () => clearDraw(false),
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

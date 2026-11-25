@@ -90,6 +90,9 @@
   .soundbar button{width:auto; margin-top:0; background:#fff; border:1px solid var(--line2); border-radius:999px; font-size:13px; padding:7px 12px; line-height:1.2;}
   .soundbar button:hover{background:#F4F4F2;}
   .soundbar button:active{transform:scale(1.1);}
+  .voicebar{display:flex; gap:8px; margin-top:12px; align-items:center; flex-wrap:wrap;}
+  .voicebar button{width:auto; margin-top:0; padding:9px 14px; font-size:13px;}
+  .vstatus{font-size:12px; color:var(--faint);}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -159,6 +162,7 @@
     </div>
     <div class="reactbar" id="hostReactBar"></div>
     <div class="soundbar" id="hostSoundBar"><span class="slabel">Sounds</span></div>
+    <div class="voicebar"><button class="ghost" id="btnVoiceHost">🎙️ Join voice</button><button class="ghost" id="btnMuteHost" style="display:none">🔊 Mic on</button><span class="vstatus" id="voiceStatusHost">Voice off — join to talk over the share</span></div>
     <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
@@ -197,6 +201,7 @@
     </div>
     <div class="reactbar" id="guestReactBar"></div>
     <div class="soundbar" id="guestSoundBar"><span class="slabel">Sounds</span></div>
+    <div class="voicebar"><button class="ghost" id="btnVoiceGuest">🎙️ Join voice</button><button class="ghost" id="btnMuteGuest" style="display:none">🔊 Mic on</button><span class="vstatus" id="voiceStatusGuest">Voice off — join to talk over the share</span></div>
     <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
@@ -217,6 +222,7 @@
   </footer>
 </div>
 
+<audio id="voiceAudio" autoplay style="display:none"></audio>
 <script>
 const $ = id => document.getElementById(id);
 const WS_URL = (location.protocol === "https:" ? "wss://" : "ws://") + location.host;
@@ -619,6 +625,151 @@ document.querySelectorAll(".soundbar").forEach(bar => {
   });
 });
 
+/* ---------- VOICE CALL ---------- */
+/* Voice rides its OWN peer connection (the screen connection is never
+   touched), negotiated over the same room channel with voice-* messages.
+   Whoever joins first offers; if the other side joins later they ask
+   for a fresh offer (voice-renegotiate). The mic runs with the
+   browser's echo cancellation, noise suppression and auto gain on,
+   and Opus is capped at voice bitrate. */
+let vpc = null, vStream = null, vOfferer = false, vRemoteReady = false, vJoined = false, vMuted = false;
+const vIceQueue = [];
+function voiceEls(){
+  const host = $("hostStage").classList.contains("on");
+  return {
+    join: $(host ? "btnVoiceHost" : "btnVoiceGuest"),
+    mute: $(host ? "btnMuteHost" : "btnMuteGuest"),
+    status: $(host ? "voiceStatusHost" : "voiceStatusGuest"),
+  };
+}
+function setVoiceStatus(txt){
+  const e = voiceEls();
+  if (e.status) e.status.textContent = txt;
+}
+function tuneVoiceSender(){
+  if (!vpc) return;
+  vpc.getSenders()
+    .filter(s => s.track && s.track.kind === "audio")
+    .forEach(s => {
+      const p = s.getParameters();
+      p.encodings = [{ maxBitrate: 64000 }];
+      s.setParameters(p).catch(() => {});
+    });
+}
+function newVoicePeer(){
+  if (vpc) { try { vpc.close(); } catch {} }
+  vRemoteReady = false;
+  vIceQueue.length = 0;
+  vpc = new RTCPeerConnection(iceConfig);
+  vpc.onicecandidate = e => { if (e.candidate) send({ type: "voice-ice", candidate: e.candidate }); };
+  vpc.ontrack = e => {
+    const a = $("voiceAudio");
+    a.srcObject = e.streams[0];
+    if (a.play) a.play().catch(() => {});
+    setVoiceStatus("Voice connected — you're talking live");
+  };
+  vpc.onconnectionstatechange = () => {
+    if (vpc && vpc.connectionState === "failed")
+      setVoiceStatus("Voice connection failed — a strict network blocked it");
+  };
+}
+async function voiceOffer(){
+  if (!vpc) return;
+  const o = await vpc.createOffer();
+  await vpc.setLocalDescription(o);
+  send({ type: "voice-offer", sdp: o });
+}
+async function flushVoiceIce(){
+  vRemoteReady = true;
+  for (const c of vIceQueue.splice(0)) { try { await vpc.addIceCandidate(c); } catch {} }
+}
+async function joinVoice(){
+  if (vJoined) return;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
+  } catch (e) {
+    setVoiceStatus("Mic blocked — allow microphone access in the browser to talk");
+    return;
+  }
+  vStream = stream;
+  vJoined = true;
+  vMuted = false;
+  stream.getAudioTracks().forEach(tr => { tr.contentHint = "speech"; });
+  const els = voiceEls();
+  els.join.textContent = "📴 Leave voice";
+  els.mute.style.display = "";
+  els.mute.textContent = "🔊 Mic on";
+  setVoiceStatus("Voice connecting…");
+  if (!vpc) {
+    newVoicePeer();
+    vOfferer = true;
+    stream.getTracks().forEach(tr => vpc.addTrack(tr, stream));
+    tuneVoiceSender();
+    await voiceOffer();
+  } else if (vOfferer) {
+    stream.getTracks().forEach(tr => vpc.addTrack(tr, stream));
+    tuneVoiceSender();
+    await voiceOffer();
+  } else {
+    stream.getTracks().forEach(tr => vpc.addTrack(tr, stream));
+    tuneVoiceSender();
+    send({ type: "voice-renegotiate" });
+  }
+}
+function leaveVoice(sendIt){
+  if (vStream) { vStream.getTracks().forEach(tr => tr.stop()); vStream = null; }
+  if (vpc) { try { vpc.close(); } catch {} vpc = null; }
+  vJoined = false;
+  vOfferer = false;
+  vRemoteReady = false;
+  const els = voiceEls();
+  if (els.join) {
+    els.join.textContent = "🎙️ Join voice";
+    els.mute.style.display = "none";
+  }
+  setVoiceStatus("Voice off — join to talk over the share");
+  const a = $("voiceAudio");
+  if (a) a.srcObject = null;
+  if (sendIt) send({ type: "voice-bye" });
+}
+function toggleMute(){
+  if (!vStream) return;
+  vMuted = !vMuted;
+  vStream.getAudioTracks().forEach(tr => { tr.enabled = !vMuted; });
+  voiceEls().mute.textContent = vMuted ? "🔇 Muted" : "🔊 Mic on";
+}
+[["btnVoiceHost", "btnMuteHost"], ["btnVoiceGuest", "btnMuteGuest"]].forEach(([j, m]) => {
+  $(j).onclick = () => { if (vJoined) leaveVoice(true); else joinVoice(); };
+  $(m).onclick = toggleMute;
+});
+async function handleVoiceOffer(msg){
+  if (vpc && vOfferer && vpc.signalingState !== "stable") {
+    // Both sides offered at once: the host's offer wins. The guest
+    // drops its own attempt and answers instead.
+    if ($("guestStage").classList.contains("on")) {
+      try { vpc.close(); } catch {}
+      vpc = null;
+      vOfferer = false;
+    } else {
+      return;
+    }
+  }
+  if (!vpc) {
+    newVoicePeer();
+    vOfferer = false;
+    if (vStream) vStream.getTracks().forEach(tr => vpc.addTrack(tr, vStream));
+  }
+  await vpc.setRemoteDescription(msg.sdp);
+  await flushVoiceIce();
+  const ans = await vpc.createAnswer();
+  await vpc.setLocalDescription(ans);
+  send({ type: "voice-answer", sdp: ans });
+  setVoiceStatus(vJoined ? "Voice connecting…" : "They joined voice — tap Join voice to talk back");
+}
+
 function newPeer(){
   if (pc) { try { pc.close(); } catch {} pc = null; }
   pc = new RTCPeerConnection(iceConfig);
@@ -819,6 +970,11 @@ async function startSharing(){
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),
     sound: msg => { if (SOUNDBOARD.some(s => s.id === msg.name)) playSound(msg.name); },
+    "voice-offer": msg => { handleVoiceOffer(msg); },
+    "voice-answer": async msg => { if (!vpc) return; await vpc.setRemoteDescription(msg.sdp); await flushVoiceIce(); },
+    "voice-ice": async msg => { if (!msg.candidate) return; if (vpc && vRemoteReady) { try { await vpc.addIceCandidate(msg.candidate); } catch {} } else vIceQueue.push(msg.candidate); },
+    "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
+    "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -907,6 +1063,11 @@ async function startWatching(){
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),
     sound: msg => { if (SOUNDBOARD.some(s => s.id === msg.name)) playSound(msg.name); },
+    "voice-offer": msg => { handleVoiceOffer(msg); },
+    "voice-answer": async msg => { if (!vpc) return; await vpc.setRemoteDescription(msg.sdp); await flushVoiceIce(); },
+    "voice-ice": async msg => { if (!msg.candidate) return; if (vpc && vRemoteReady) { try { await vpc.addIceCandidate(msg.candidate); } catch {} } else vIceQueue.push(msg.candidate); },
+    "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
+    "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

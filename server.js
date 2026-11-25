@@ -44,6 +44,8 @@ const ET2_TURN_CREDENTIAL = process.env.ET2_TURN_CREDENTIAL || "";
 const ET_TURN_URLS = (process.env.ET_TURN_URLS || "turn:free.expressturn.com:3478?transport=udp,turn:free.expressturn.com:3478?transport=tcp")
   .split(",").map(s => s.trim()).filter(Boolean);
 
+let turnCounter = 0;
+
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
@@ -67,11 +69,19 @@ const server = http.createServer(async (req, res) => {
         }
       } catch (e) { /* skip Cloudflare, keep the other relays */ }
     }
+    // ExpressTURN accounts rotate: each /turn call hands out the next
+    // account as the session's relay, so the free quota pools drain
+    // evenly instead of burning one account dry first.
+    const etEntries = [];
     if (ET_TURN_USERNAME && ET_TURN_CREDENTIAL) {
-      servers.push({ urls: ET_TURN_URLS, username: ET_TURN_USERNAME, credential: ET_TURN_CREDENTIAL });
+      etEntries.push({ urls: ET_TURN_URLS, username: ET_TURN_USERNAME, credential: ET_TURN_CREDENTIAL });
     }
     if (ET2_TURN_USERNAME && ET2_TURN_CREDENTIAL) {
-      servers.push({ urls: ET_TURN_URLS, username: ET2_TURN_USERNAME, credential: ET2_TURN_CREDENTIAL });
+      etEntries.push({ urls: ET_TURN_URLS, username: ET2_TURN_USERNAME, credential: ET2_TURN_CREDENTIAL });
+    }
+    if (etEntries.length) {
+      turnCounter += 1;
+      servers.push(etEntries[turnCounter % etEntries.length]);
     }
     if (TURN_SECRET) {
       const username = String(Math.floor(Date.now() / 1000) + 3600);

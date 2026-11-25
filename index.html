@@ -85,6 +85,11 @@
   .drawtools .swatch{width:30px; height:30px; border-radius:50%; border:2px solid var(--line2); margin-top:0; padding:0;}
   .drawtools .swatch.on{border-color:var(--ink); transform:scale(1.14);}
   .drawtools .clearbtn{width:auto; margin-top:0; padding:8px 14px; font-size:13px;}
+  .soundbar{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center;}
+  .soundbar .slabel{font-size:12px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; color:var(--faint);}
+  .soundbar button{width:auto; margin-top:0; background:#fff; border:1px solid var(--line2); border-radius:999px; font-size:13px; padding:7px 12px; line-height:1.2;}
+  .soundbar button:hover{background:#F4F4F2;}
+  .soundbar button:active{transform:scale(1.1);}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -153,6 +158,7 @@
       <canvas class="drawcanvas" id="hostDrawCanvas"></canvas>
     </div>
     <div class="reactbar" id="hostReactBar"></div>
+    <div class="soundbar" id="hostSoundBar"><span class="slabel">Sounds</span></div>
     <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
@@ -190,6 +196,7 @@
       <canvas class="drawcanvas" id="guestDrawCanvas"></canvas>
     </div>
     <div class="reactbar" id="guestReactBar"></div>
+    <div class="soundbar" id="guestSoundBar"><span class="slabel">Sounds</span></div>
     <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span style="font-size:12px; color:var(--faint)">Drag on the picture to draw — they see it live.</span></div>
     <div class="chatbox">
       <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
@@ -529,6 +536,89 @@ $("hostDrawClear").onclick = () => clearDraw(true);
 $("guestDrawClear").onclick = () => clearDraw(true);
 window.addEventListener("resize", () => { if (DRAW.history.length) fitDrawCanvas(); });
 
+/* ---------- SOUNDBOARD ---------- */
+/* The six classic sounds, synthesised live with WebAudio — no audio
+   files, and our own home-made versions (not Discord's recordings).
+   Tap one and it plays on BOTH sides: yours instantly, theirs when
+   the message lands. */
+const SOUNDBOARD = [
+  { id: "quack", label: "🦆 Quack" },
+  { id: "airhorn", label: "📯 Airhorn" },
+  { id: "cricket", label: "🦗 Cricket" },
+  { id: "clap", label: "👏 Golf clap" },
+  { id: "sadhorn", label: "🎺 Sad horn" },
+  { id: "badum", label: "🥁 Ba dum tss" },
+];
+let AC = null;
+function audio(){
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === "suspended") AC.resume();
+  return AC;
+}
+document.addEventListener("pointerdown", () => { try { audio(); } catch (e) {} });
+function blip(ac, dest, when, f0, f1, dur, type, gain){
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, when);
+  o.frequency.exponentialRampToValueAtTime(Math.max(30, f1), when + dur);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(gain, when + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g); g.connect(dest);
+  o.start(when); o.stop(when + dur + 0.05);
+}
+function noiseHit(ac, dest, when, dur, freq, gain, type){
+  const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const f = ac.createBiquadFilter(); f.type = type || "highpass"; f.frequency.value = freq;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(gain, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  src.connect(f); f.connect(g); g.connect(dest);
+  src.start(when);
+}
+function playSound(name){
+  let ac;
+  try { ac = audio(); } catch (e) { return; }
+  const t = ac.currentTime + 0.03;
+  const master = ac.createGain();
+  master.gain.value = 0.5;
+  master.connect(ac.destination);
+  if (name === "quack") {
+    for (let i = 0; i < 2; i++)
+      blip(ac, master, t + i * 0.14, 650, 240, 0.1, "sawtooth", 0.5);
+  } else if (name === "airhorn") {
+    [370, 466, 587].forEach(fr => blip(ac, master, t, fr, fr, 0.7, "sawtooth", 0.16));
+  } else if (name === "cricket") {
+    for (let grp = 0; grp < 3; grp++)
+      for (let p = 0; p < 4; p++)
+        blip(ac, master, t + grp * 0.22 + p * 0.05, 4200, 4200, 0.03, "sine", 0.22);
+  } else if (name === "clap") {
+    for (let i = 0; i < 9; i++)
+      noiseHit(ac, master, t + Math.random() * 0.85, 0.05, 1500, 0.10, "bandpass");
+  } else if (name === "sadhorn") {
+    const notes = [392, 370, 349];
+    notes.forEach((fr, i) => blip(ac, master, t + i * 0.3, fr, fr, 0.26, "sawtooth", 0.3));
+    blip(ac, master, t + 0.9, 311, 292, 0.95, "sawtooth", 0.3);
+  } else if (name === "badum") {
+    blip(ac, master, t, 160, 75, 0.13, "sine", 0.8);
+    blip(ac, master, t + 0.17, 150, 70, 0.13, "sine", 0.8);
+    noiseHit(ac, master, t + 0.34, 0.5, 6000, 0.22, "highpass");
+  }
+}
+document.querySelectorAll(".soundbar").forEach(bar => {
+  SOUNDBOARD.forEach(s => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = s.label;
+    b.onclick = () => { playSound(s.id); send({ type: "sound", name: s.id }); };
+    bar.appendChild(b);
+  });
+});
+
 function newPeer(){
   if (pc) { try { pc.close(); } catch {} pc = null; }
   pc = new RTCPeerConnection(iceConfig);
@@ -728,6 +818,7 @@ async function startSharing(){
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),
+    sound: msg => { if (SOUNDBOARD.some(s => s.id === msg.name)) playSound(msg.name); },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -815,6 +906,7 @@ async function startWatching(){
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),
+    sound: msg => { if (SOUNDBOARD.some(s => s.id === msg.name)) playSound(msg.name); },
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

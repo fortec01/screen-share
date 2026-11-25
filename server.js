@@ -37,6 +37,10 @@ const CF_TURN_TOKEN = process.env.CF_TURN_TOKEN || "";
 // alongside the others so browsers can use whichever relay answers.
 const ET_TURN_USERNAME = process.env.ET_TURN_USERNAME || "";
 const ET_TURN_CREDENTIAL = process.env.ET_TURN_CREDENTIAL || "";
+// Optional second ExpressTURN account — a separate free quota pool,
+// offered as another relay entry with the same server URLs.
+const ET2_TURN_USERNAME = process.env.ET2_TURN_USERNAME || "";
+const ET2_TURN_CREDENTIAL = process.env.ET2_TURN_CREDENTIAL || "";
 const ET_TURN_URLS = (process.env.ET_TURN_URLS || "turn:free.expressturn.com:3478?transport=udp,turn:free.expressturn.com:3478?transport=tcp")
   .split(",").map(s => s.trim()).filter(Boolean);
 
@@ -65,6 +69,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (ET_TURN_USERNAME && ET_TURN_CREDENTIAL) {
       servers.push({ urls: ET_TURN_URLS, username: ET_TURN_USERNAME, credential: ET_TURN_CREDENTIAL });
+    }
+    if (ET2_TURN_USERNAME && ET2_TURN_CREDENTIAL) {
+      servers.push({ urls: ET_TURN_URLS, username: ET2_TURN_USERNAME, credential: ET2_TURN_CREDENTIAL });
     }
     if (TURN_SECRET) {
       const username = String(Math.floor(Date.now() / 1000) + 3600);

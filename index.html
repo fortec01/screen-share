@@ -56,6 +56,13 @@
   .dot.err{background:#FF5C7A;}
   @keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.3);}}
   .stats{color:rgba(255,255,255,.62); font-size:12px; font-variant-numeric:tabular-nums; font-family:"JetBrains Mono",monospace;}
+  .reactlayer{position:absolute; inset:0; overflow:hidden; pointer-events:none;}
+  .float-emoji{position:absolute; bottom:6px; font-size:44px; line-height:1; animation:floatUp 2.6s ease-out forwards; will-change:transform,opacity; text-shadow:0 2px 10px rgba(0,0,0,.35);}
+  @keyframes floatUp{0%{transform:translate(0,0) scale(.6); opacity:0;}12%{opacity:1; transform:translate(calc(var(--dx) * .3),-56px) scale(1.15);}100%{transform:translate(var(--dx),-52vh) scale(1); opacity:0;}}
+  .reactbar{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .reactbar button{width:auto; margin-top:0; background:#fff; border:1px solid var(--line2); border-radius:999px; font-size:20px; padding:6px 12px; line-height:1.2;}
+  .reactbar button:hover{background:#F4F4F2;}
+  .reactbar button:active{transform:scale(1.18);}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -119,7 +126,9 @@
     <div class="videobox">
       <video id="localVideo" autoplay muted playsinline></video>
       <div class="overlay"><div class="dot wait" id="hostDot"></div><span id="hostStatus">Waiting for your viewer to join…</span><span class="stats" id="hostStats"></span></div>
+      <div class="reactlayer" id="hostReactLayer"></div>
     </div>
+    <div class="reactbar" id="hostReactBar"></div>
     <label>Send them this code — or copy the link, it carries the code with it</label>
     <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
     <label for="qualityLive">Quality — change it any time, it applies live</label>
@@ -147,7 +156,9 @@
     <div class="videobox">
       <video id="remoteVideo" autoplay playsinline controls></video>
       <div class="overlay"><div class="dot wait" id="guestDot"></div><span id="guestStatus">Connecting…</span><span class="stats" id="guestStats"></span></div>
+      <div class="reactlayer" id="guestReactLayer"></div>
     </div>
+    <div class="reactbar" id="guestReactBar"></div>
     <div class="row">
       <button class="ghost" id="btnFull">Fullscreen</button>
       <button class="danger" id="btnLeave">Leave</button>
@@ -211,6 +222,36 @@ function connectWS(handlers){
   return ws;
 }
 function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+/* ---------- REACTIONS ---------- */
+/* One tap sends a tiny message over the same connection that set up
+   the room (the server relays it to the other side) and the emoji
+   floats up over the picture on BOTH screens. Nothing is stored. */
+const REACTIONS = ["❤️","😂","😮","👏","🔥","👍","🎉","😢"];
+function myReactLayer(){
+  return $("hostStage").classList.contains("on") ? $("hostReactLayer") : $("guestReactLayer");
+}
+function spawnReaction(emoji){
+  const layer = myReactLayer();
+  if (!layer) return;
+  while (layer.children.length >= 24) layer.firstChild.remove();
+  const s = document.createElement("span");
+  s.className = "float-emoji";
+  s.textContent = emoji;
+  s.style.left = (6 + Math.random() * 82) + "%";
+  s.style.setProperty("--dx", Math.round(Math.random() * 90 - 45) + "px");
+  layer.appendChild(s);
+  setTimeout(() => s.remove(), 2700);
+}
+document.querySelectorAll(".reactbar").forEach(bar => {
+  REACTIONS.forEach(e => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = e;
+    b.onclick = () => { spawnReaction(e); send({ type:"reaction", emoji:e }); };
+    bar.appendChild(b);
+  });
+});
 
 function newPeer(){
   if (pc) { try { pc.close(); } catch {} pc = null; }
@@ -406,6 +447,7 @@ async function startSharing(){
     },
     answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
     ice: async msg => { await addIce(msg.candidate); },
+    reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -488,6 +530,7 @@ async function startWatching(){
       send({ type:"answer", sdp: answer });
     },
     ice: async msg => { await addIce(msg.candidate); },
+    reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

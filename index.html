@@ -63,6 +63,15 @@
   .reactbar button{width:auto; margin-top:0; background:#fff; border:1px solid var(--line2); border-radius:999px; font-size:20px; padding:6px 12px; line-height:1.2;}
   .reactbar button:hover{background:#F4F4F2;}
   .reactbar button:active{transform:scale(1.18);}
+  .chatbox{margin-top:14px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 1px 2px rgba(16,16,20,.04);}
+  .chatlog{max-height:220px; overflow-y:auto; display:flex; flex-direction:column; gap:9px; margin-bottom:11px;}
+  .chatempty{color:var(--faint); font-size:13px; line-height:1.5;}
+  .chatmsg{font-size:14px; line-height:1.45; overflow-wrap:break-word;}
+  .chatmsg .who{display:block; font-size:11px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; color:var(--faint); margin-bottom:1px;}
+  .chatmsg.mine .who{color:var(--accent);}
+  .chatrow{display:flex; gap:8px;}
+  .chatrow input{flex:1; text-transform:none; letter-spacing:normal; text-align:left; font-family:inherit; font-weight:400; font-size:14px;}
+  .chatrow button{width:auto; margin-top:0; padding:0 18px;}
   .codebox{display:flex; gap:10px; align-items:stretch; margin-top:6px;}
   .codebox .code{flex:1; background:#fff; border:1.5px dashed rgba(79,70,229,.45); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; letter-spacing:7px; padding:11px; font-family:"JetBrains Mono",monospace;}
   .codebox button{width:auto; padding:0 20px; margin-top:0;}
@@ -129,6 +138,10 @@
       <div class="reactlayer" id="hostReactLayer"></div>
     </div>
     <div class="reactbar" id="hostReactBar"></div>
+    <div class="chatbox">
+      <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
+      <div class="chatrow"><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend">Send</button></div>
+    </div>
     <label>Send them this code — or copy the link, it carries the code with it</label>
     <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
     <label for="qualityLive">Quality — change it any time, it applies live</label>
@@ -159,6 +172,10 @@
       <div class="reactlayer" id="guestReactLayer"></div>
     </div>
     <div class="reactbar" id="guestReactBar"></div>
+    <div class="chatbox">
+      <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
+      <div class="chatrow"><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend">Send</button></div>
+    </div>
     <div class="row">
       <button class="ghost" id="btnFull">Fullscreen</button>
       <button class="danger" id="btnLeave">Leave</button>
@@ -251,6 +268,43 @@ document.querySelectorAll(".reactbar").forEach(bar => {
     b.onclick = () => { spawnReaction(e); send({ type:"reaction", emoji:e }); };
     bar.appendChild(b);
   });
+});
+
+/* ---------- CHAT ---------- */
+/* Same road as reactions: a tiny message over the room connection,
+   rendered as text (never HTML, so nothing can inject markup).
+   Nothing is stored — the log lives in the page and dies with it. */
+function myChatLog(){
+  return $("hostStage").classList.contains("on") ? $("hostChatLog") : $("guestChatLog");
+}
+function addChat(who, text, mine){
+  const log = myChatLog();
+  if (!log) return;
+  const empty = log.querySelector(".chatempty");
+  if (empty) empty.remove();
+  const d = document.createElement("div");
+  d.className = "chatmsg" + (mine ? " mine" : "");
+  const w = document.createElement("span");
+  w.className = "who";
+  w.textContent = who;
+  const t = document.createElement("span");
+  t.textContent = text;
+  d.appendChild(w);
+  d.appendChild(t);
+  log.appendChild(d);
+  while (log.children.length > 100) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+function sendChat(inputEl){
+  const text = inputEl.value.trim().slice(0, 500);
+  if (!text) return;
+  inputEl.value = "";
+  addChat("You", text, true);
+  send({ type:"chat", text });
+}
+[["hostChatInput","hostChatSend"],["guestChatInput","guestChatSend"]].forEach(([inp, btn]) => {
+  $(btn).onclick = () => sendChat($(inp));
+  $(inp).addEventListener("keydown", e => { if (e.key === "Enter") sendChat($(inp)); });
 });
 
 function newPeer(){
@@ -448,6 +502,7 @@ async function startSharing(){
     answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
     ice: async msg => { await addIce(msg.candidate); },
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
+    chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
     "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
     error: msg => { $("hostStatus").textContent = msg.message; }
   });
@@ -531,6 +586,7 @@ async function startWatching(){
     },
     ice: async msg => { await addIce(msg.candidate); },
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
+    chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
     "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
     error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
   });

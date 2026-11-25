@@ -98,8 +98,8 @@
       </select>
       <label for="mode">Watching</label>
       <select id="mode">
-        <option value="motion" selected>Video / movies — smoothest motion</option>
-        <option value="detail">Text / code — sharpest picture</option>
+        <option value="motion" selected>Video — smooth motion</option>
+        <option value="detail">Text — sharpest picture</option>
       </select>
       <button id="btnShare">Start sharing</button>
       <div class="err" id="shareErr"></div>
@@ -380,20 +380,24 @@ async function startSharing(){
 $("btnShare").onclick = startSharing;
 
 /* ---------- PHONES ---------- */
-/* One rule for every phone: default to the light 720p tier, and if the
-   browser has no screen capture at all, say so up front with the way
-   out — instead of letting the tap fail into a red error. */
-const IS_PHONE = matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 500
+/* One rule for every phone: never offer a Share button that cannot
+   work. No phone browser can capture the screen from a web page —
+   MDN lists getDisplayMedia as unsupported in Chrome, Firefox and
+   Samsung Internet on Android (in some versions the function exists
+   but always rejects), and in every browser on iOS — so checking for
+   the function's presence is NOT enough: hide sharing on any phone
+   by UA / touch screen, and say so up front instead of letting the
+   tap fail into a red error. Default remains the light 720p tier for
+   the cases where sharing is possible (small laptop, slow data). */
+const IS_PHONE = (matchMedia("(pointer: coarse)").matches && Math.min(screen.width, screen.height) < 500)
   || /Android|iPhone|iPad/i.test(navigator.userAgent);
 const CAN_SHARE = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
 if (IS_PHONE) $("quality").value = "720p30";
-if (!CAN_SHARE) {
+if (!CAN_SHARE || IS_PHONE) {
   const ua = navigator.userAgent;
-  const msg = /iPhone|iPad/.test(ua)
-    ? "This iPhone/iPad browser can't share its screen — no iOS browser can. Watching works great below, or share from a computer."
-    : /Android/.test(ua)
-      ? "This browser can't share its screen. On Android, Firefox can — open this page in Firefox to share from your phone. Watching works great below."
-      : "This browser can't share its screen. Try Chrome or Edge on a computer — watching works great below.";
+  const msg = IS_PHONE
+    ? "Sharing from a phone isn't possible from a web page — no Android or iPhone browser can capture the screen. Watching works below, or share from a computer."
+    : "This browser can't share its screen. Try Chrome or Edge on a computer — watching works great below.";
   $("btnShare").style.display = "none";
   $("quality").style.display = "none";
   $("mode").style.display = "none";

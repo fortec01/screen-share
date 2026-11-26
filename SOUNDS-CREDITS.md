@@ -7,6 +7,12 @@ for the site; the recordings themselves are otherwise unaltered.
 
 | Sound | Recording | Author | License | Source |
 |---|---|---|---|---|
+| 67 | "Sixseven 67" — the author's own voice saying "Six seven / 6-7" (original recording of the meme phrase) | qubodup | CC0 | https://freesound.org/people/qubodup/sounds/832306/ |
+| Pikachu | "pikachu pokemon" — a voice impression ("pika pi / pikachu"); not Nintendo audio | silasonlyW | CC0 | https://freesound.org/people/silasonlyW/sounds/700348/ |
+| Bruh | Bruh Sound Effect #1 | Autellaem | CC0 | https://freesound.org/people/Autellaem/sounds/534387/ |
+| Vine boom | Drama Boom — a thunder sheet struck by the author (original recreation of the vine boom) | modusmogulus | CC0 | https://freesound.org/people/modusmogulus/sounds/785925/ |
+| Metal pipe | Metal Pipe Falling on Concrete in Basement (field recording, 2010) | RutgerMuller | CC0 | https://freesound.org/people/RutgerMuller/sounds/104355/ |
+| Dun dun duuun | Dun Dun Duuun v.01 (dramatic sting) | divenorth | CC0 | https://freesound.org/people/divenorth/sounds/215558/ |
 | Quack | Mallard Duck Quacking | Mike Koenig | CC BY 3.0 | https://soundbible.com/1862-Mallard-Duck-Quacking.html |
 | Airhorn | Air Horn | Mike Koenig | CC BY 3.0 | https://soundbible.com/1542-Air-Horn.html |
 | Ba dum tss | Ba dum bum stings | eggsandwichent | CC0 | https://commons.wikimedia.org/wiki/File:Ba_dum_bum_stings.ogg |

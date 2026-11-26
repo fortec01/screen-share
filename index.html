@@ -236,6 +236,14 @@
     .chatbackdrop{display:block; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:70; opacity:0; pointer-events:none; transition:opacity .2s ease;}
     .room.chat-open .chatbackdrop{opacity:1; pointer-events:auto;}
   }
+  /* Leave / End are labelled pills, not icon-only circles — nobody
+     should have to guess which button ends the call. */
+  .controlbar{flex-wrap:wrap;}
+  .cbtn.leave{width:auto; padding:0 20px; border-radius:999px; gap:8px;}
+  .cbtn .xlab{position:static; width:auto; height:auto; overflow:visible; clip:auto; clip-path:none; white-space:nowrap; font-size:14px; font-weight:700;}
+  #homeNotice{display:none; background:#fef3c7; border:1px solid #f0b429; color:#7c4a03; border-radius:10px; padding:10px 14px; font-size:14px; margin:0 0 14px;}
+  #reshareOverlay{flex-direction:column; gap:10px;}
+  #reshareOverlay button{margin:0;}
 </style>
 </head>
 <body>
@@ -249,6 +257,8 @@
     <h1>Share your screen,<br>instantly.</h1>
     <p>A private link between two browsers. No accounts, no installs, nothing recorded — the video travels directly between the two browsers, never through a server.</p>
   </div>
+
+  <div id="homeNotice" role="status"></div>
 
   <div class="cards" id="home">
     <div class="card">
@@ -299,6 +309,7 @@
           <canvas class="drawcanvas" id="hostDrawCanvas"></canvas>
           <div class="tilelabel"><span class="livebadge">LIVE</span><span class="tile-name">You</span></div>
           <div class="tiletools"><button type="button" class="tiletool fsbtn" data-fs aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button></div>
+          <div class="playoverlay" id="reshareOverlay" style="display:none"><span>You're back in your room</span><span style="font-weight:400; font-size:13.5px;">The browser can't restart your screen capture on its own — one tap does it.</span><button type="button" id="btnReshare">Share your screen again</button></div>
         </div>
         <div class="controlbar">
           <button type="button" class="cbtn" id="btnVoiceHost" title="Voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg><span class="blabel">Join voice</span></button>
@@ -307,7 +318,7 @@
           <button type="button" class="cbtn" id="btnDrawHost" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
           <button type="button" class="cbtn" id="btnChatHost" data-chattoggle title="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
           <button type="button" class="cbtn fsbtn" data-fs title="Full screen" aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
-          <button type="button" class="cbtn leave" id="btnStop" title="Stop sharing"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="sr-only">Stop sharing</span></button>
+          <button type="button" class="cbtn leave" id="btnStop" title="End the stream — closes the room for your viewer too"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="xlab">End stream</span></button>
         </div>
         <div class="voicestatus" id="voiceStatusHost">Voice off — join to talk over the share</div>
         <div class="roomtools">
@@ -377,7 +388,7 @@
           <button type="button" class="cbtn" id="btnDrawGuest" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
           <button type="button" class="cbtn" id="btnChatGuest" data-chattoggle title="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
           <button type="button" class="cbtn fsbtn" id="btnFull" data-fs title="Full screen" aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
-          <button type="button" class="cbtn leave" id="btnLeave" title="Leave"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="sr-only">Leave</span></button>
+          <button type="button" class="cbtn leave" id="btnLeave" title="Leave this room"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="xlab">Leave room</span></button>
         </div>
         <div class="voicestatus" id="voiceStatusGuest">Voice off — join to talk over the share</div>
         <div class="roomtools">
@@ -458,15 +469,104 @@ const QUALITY = {
 let ws = null, pc = null, localStream = null, statsTimer = null;
 let remoteReady = false; const iceQueue = [];
 
+function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+/* ---------- ROOM SESSION: the room survives refresh / background ---------- */
+/* A room is yours until you explicitly Leave / End it (or the host
+   ends it). The session (role + room code) is kept in sessionStorage
+   — per-tab, so it survives a refresh but not a closed tab — and on
+   page load you are put straight back into your room. The signaling
+   socket reconnects by itself with backoff (background throttling
+   and network blips kill sockets; they shouldn't kill the room) and
+   re-joins the same room when it returns. */
+const SS_KEY = "ss-session", SS_NOTICE = "ss-notice";
+let session = null;       // { role: "host"|"guest", code: string|null }
+let rejoinMode = null;    // "host"|"guest" while a restore is in flight
+let guestPresent = false; // host side: a viewer is seated in the room
+let wsHandlers = null, wsWanted = false, wsBackoff = 1000, wsRetryTimer = null;
+
+function saveSession(){
+  try {
+    if (session && session.code) sessionStorage.setItem(SS_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SS_KEY);
+  } catch {}
+}
+function clearSession(){
+  session = null;
+  try { sessionStorage.removeItem(SS_KEY); } catch {}
+}
+function setNotice(text){ try { sessionStorage.setItem(SS_NOTICE, text); } catch {} }
+
 function connectWS(handlers){
-  ws = new WebSocket(WS_URL);
-  ws.onmessage = e => {
-    const msg = JSON.parse(e.data);
-    if (handlers[msg.type]) handlers[msg.type](msg);
-  };
+  wsHandlers = handlers;
+  wsWanted = true;
+  openWS();
   return ws;
 }
-function send(obj){ if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+function openWS(){
+  if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  ws = new WebSocket(WS_URL);
+  ws.onmessage = e => {
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (wsHandlers && wsHandlers[msg.type]) wsHandlers[msg.type](msg);
+  };
+  ws.onopen = () => { wsBackoff = 1000; joinWire(); };
+  ws.onclose = () => {
+    if (!wsWanted) return;
+    wsRetryTimer = setTimeout(() => { wsRetryTimer = null; if (wsWanted) openWS(); }, wsBackoff);
+    wsBackoff = Math.min(wsBackoff * 2, 10000);
+  };
+}
+/* What to (re)send every time the signaling socket (re)connects:
+   a brand-new host creates a room; a returning host re-claims its
+   code; a guest (re)joins its room. */
+function joinWire(){
+  if (!session) return;
+  if (session.role === "host") {
+    if (session.code) send({ type:"host-rejoin", code: session.code });
+    else send({ type:"create" });
+  } else if (session.code) {
+    send({ type:"join", code: session.code });
+  }
+}
+function closeWS(){
+  wsWanted = false;
+  if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  if (ws) { try { ws.close(); } catch {} }
+}
+
+/* ---------- KEEP-ALIVE: wake lock + revive on return ---------- */
+/* While you're in a room we ask the screen to stay awake (best
+   effort — not every browser grants it). When the page comes back
+   to the foreground, the wake lock is re-taken and a peer connection
+   that died while backgrounded gets an ICE restart instead of
+   sitting on a frozen frame. */
+let wakeLock = null;
+async function grabWakeLock(){
+  try {
+    if ("wakeLock" in navigator && document.visibilityState === "visible" && session) {
+      wakeLock = await navigator.wakeLock.request("screen");
+    }
+  } catch {}
+}
+let lastRestartAsk = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible" || !session) return;
+  grabWakeLock();
+  if (wsWanted && (!ws || ws.readyState >= 2) && !wsRetryTimer) openWS();
+  if (pc && (pc.connectionState === "failed" || pc.connectionState === "disconnected")) {
+    if (session.role === "host") hostIceRestart();
+    else if (Date.now() - lastRestartAsk > 5000) { lastRestartAsk = Date.now(); send({ type:"want-ice-restart" }); }
+  }
+});
+async function hostIceRestart(){
+  if (!pc || !localStream) return;
+  try {
+    const o = await pc.createOffer({ iceRestart: true });
+    await pc.setLocalDescription(o);
+    if (pc) send({ type:"offer", sdp: o });
+  } catch {}
+}
 
 /* ---------- REACTIONS ---------- */
 /* One tap sends a tiny message over the same connection that set up
@@ -1237,15 +1337,10 @@ function makeTestStream(){
 }
 
 /* ---------- HOST ---------- */
-async function startSharing(){
-  $("shareErr").textContent = "";
-  /* The live (host-stage) selects mirror the home picks from here on,
-     and tuneSender reads them — so mid-share changes apply live. */
-  $("qualityLive").value = $("quality").value;
-  $("modeLive").value = $("mode").value;
-  const q0 = QUALITY[$("quality").value];
+async function captureScreen(qualityValue){
+  const q0 = QUALITY[qualityValue];
   try {
-    localStream = TEST ? makeTestStream()
+    return TEST ? makeTestStream()
       : await navigator.mediaDevices.getDisplayMedia({
           video: q0
             ? { width: { ideal: q0.w }, height: { ideal: q0.h }, frameRate: { ideal: q0.fps, max: q0.fps }, resizeMode: "none" }
@@ -1256,23 +1351,28 @@ async function startSharing(){
     $("shareErr").textContent = (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
       ? "Screen pick was cancelled — tap Start sharing and choose a screen to try again."
       : "This browser can't share its screen (see the note above).";
-    return;
+    return null;
   }
+}
+
+function enterHostStage(stream){
+  localStream = stream;
   $("home").style.display = "none";
   $("hostStage").classList.add("on");
   $("localVideo").srcObject = localStream;
-  await loadIce();
+  $("reshareOverlay").style.display = "none";
   const vt = localStream.getVideoTracks()[0];
-  if (vt) vt.onended = stopSharing;
+  /* Stopping the capture from the browser's own sharing UI ends
+     the stream for everyone — exactly like pressing End stream. */
+  if (vt) vt.onended = endStream;
+  grabWakeLock();
+}
 
-  connectWS({
-    created: msg => {
-      $("roomCode").textContent = msg.code;
-      document.title = "ROOM " + msg.code;
-      history.replaceState(null,"","?room="+msg.code);
-    },
-    "guest-joined": async () => {
-      $("hostStatus").textContent = "Viewer joined — connecting…";
+/* Build the peer connection to the seated viewer and send the
+   offer. Runs when a viewer joins while we're sharing, and right
+   after a re-share if the viewer waited through it. */
+async function startHostPeer(){
+  if (!localStream || !guestPresent) return;
       newPeer();
       const myPc = pc;
       const transceivers = localStream.getTracks().map(t => myPc.addTransceiver(t, { streams: [localStream] }));
@@ -1301,6 +1401,67 @@ async function startSharing(){
       const offer = await myPc.createOffer();
       await myPc.setLocalDescription(offer);
       send({ type:"offer", sdp: offer });
+}
+
+async function startSharing(){
+  $("shareErr").textContent = "";
+  /* The live (host-stage) selects mirror the home picks from here on,
+     and tuneSender reads them — so mid-share changes apply live. */
+  $("qualityLive").value = $("quality").value;
+  $("modeLive").value = $("mode").value;
+  const stream = await captureScreen($("quality").value);
+  if (!stream) return;
+  session = { role:"host", code:null };
+  enterHostStage(stream);
+  await loadIce();
+  connectWS(hostHandlers());
+}
+
+/* A host whose page refreshed lands back here: same room, same
+   code — only the screen capture needs one fresh tap, because
+   browsers require a user gesture for getDisplayMedia. */
+function rejoinAsHost(code){
+  session = { role:"host", code };
+  rejoinMode = "host";
+  $("home").style.display = "none";
+  $("hostStage").classList.add("on");
+  $("roomCode").textContent = code;
+  document.title = "ROOM " + code;
+  history.replaceState(null,"","?room="+code);
+  $("hostDot").className = "dot wait";
+  $("hostStatus").textContent = "Welcome back — tap below to share your screen again.";
+  $("reshareOverlay").style.display = "flex";
+  grabWakeLock();
+  loadIce().then(() => connectWS(hostHandlers()));
+}
+
+async function reshare(){
+  const stream = await captureScreen($("qualityLive").value);
+  if (!stream) { $("hostStatus").textContent = "Screen pick was cancelled — tap below to try again."; return; }
+  enterHostStage(stream);
+  if (guestPresent) { $("hostStatus").textContent = "Viewer is here — connecting…"; startHostPeer(); }
+  else $("hostStatus").textContent = "Sharing again — waiting for your viewer to join…";
+}
+$("btnReshare").onclick = reshare;
+
+function hostHandlers(){
+  return {
+    created: msg => {
+      if (session && session.role === "host") { session.code = msg.code; saveSession(); }
+      rejoinMode = null;
+      $("roomCode").textContent = msg.code;
+      document.title = "ROOM " + msg.code;
+      history.replaceState(null,"","?room="+msg.code);
+    },
+    "guest-joined": async () => {
+      guestPresent = true;
+      if (!localStream) {
+        $("hostStatus").textContent = "Your viewer is here — tap below to share your screen.";
+        $("reshareOverlay").style.display = "flex";
+        return;
+      }
+      $("hostStatus").textContent = "Viewer joined — connecting…";
+      startHostPeer();
     },
     answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
     ice: async msg => { await addIce(msg.candidate); },
@@ -1323,10 +1484,13 @@ async function startSharing(){
       note.textContent = "Your viewer asked for " + msg.preset.replace("p", "p · ") + " — applied.";
       setTimeout(() => { if (note.textContent.startsWith("Your viewer")) note.textContent = ""; }, 6000);
     },
-    "guest-left": () => { $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
-    error: msg => { $("hostStatus").textContent = msg.message; }
-  });
-  ws.onopen = () => send({ type:"create" });
+    "want-ice-restart": () => { hostIceRestart(); },
+    "guest-left": () => { guestPresent = false; $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
+    error: msg => {
+      if (rejoinMode === "host") { bailHome("That room has ended."); return; }
+      $("hostStatus").textContent = msg.message;
+    }
+  };
 }
 $("btnShare").onclick = startSharing;
 $("qualityLive").onchange = () => { if (localStream) tuneSender(localStream); };
@@ -1360,13 +1524,21 @@ if (!CAN_SHARE || IS_PHONE) {
   note.textContent = msg;
 }
 
-function stopSharing(){
+function endStream(){
+  /* Ending is final and closes the room for everyone: the server
+     tells the viewer and deletes the room, and this page forgets
+     the session, so a refresh afterwards lands on the home screen
+     instead of resurrecting the room. (If the socket happens to be
+     mid-reconnect, closing it below still ends the room — the
+     server treats a vanished host the same way.) */
+  if (session && session.role === "host") send({ type:"end-room" });
+  clearSession();
+  closeWS();
   if (localStream) localStream.getTracks().forEach(t => t.stop());
-  if (pc) pc.close();
-  if (ws) ws.close();
+  if (pc) { try { pc.close(); } catch {} pc = null; }
   location.href = location.pathname;
 }
-$("btnStop").onclick = stopSharing;
+$("btnStop").onclick = endStream;
 $("btnCopy").onclick = async () => {
   const link = location.origin + location.pathname + "?room=" + $("roomCode").textContent;
   try { await navigator.clipboard.writeText(link); $("btnCopy").textContent = "Copied ✓"; setTimeout(()=>$("btnCopy").textContent="Copy link", 1600); }
@@ -1377,14 +1549,23 @@ $("btnCopy").onclick = async () => {
 const params = new URLSearchParams(location.search);
 if (params.get("room")) $("code").value = params.get("room").toUpperCase();
 
-async function startWatching(){
+async function startWatching(fromRestore){
   const code = $("code").value.trim().toUpperCase();
   $("watchErr").textContent = "";
   if (code.length !== 6) { $("watchErr").textContent = "That code is 6 characters — check it and try again."; return; }
+  session = { role:"guest", code };
+  saveSession();
+  if (fromRestore) rejoinMode = "guest";
   $("home").style.display = "none";
   $("guestStage").classList.add("on");
+  grabWakeLock();
 
   await loadIce();
+  setupGuestPeer();
+  connectWS(guestHandlers());
+}
+
+function setupGuestPeer(){
   newPeer();
   const myPc = pc;
   pc.ontrack = e => {
@@ -1404,10 +1585,13 @@ async function startWatching(){
     if (myPc.connectionState === "connected") { $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
     if (myPc.connectionState === "failed") { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
   };
+}
 
-  connectWS({
-    joined: () => { $("guestStatus").textContent = "In the room — waiting for the picture…"; },
+function guestHandlers(){
+  return {
+    joined: () => { rejoinMode = null; $("guestStatus").textContent = "In the room — waiting for the picture…"; },
     offer: async msg => {
+      if (!pc || pc.signalingState === "closed") setupGuestPeer();
       await pc.setRemoteDescription(msg.sdp);
       await flushIce();
       const answer = await pc.createAnswer();
@@ -1426,13 +1610,40 @@ async function startWatching(){
     "voice-ice": async msg => { if (!msg.candidate) return; if (vpc && vRemoteReady) { try { await vpc.addIceCandidate(msg.candidate); } catch {} } else vIceQueue.push(msg.candidate); },
     "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
     "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
-    "host-left": () => { $("guestDot").className = "dot err"; $("guestStatus").textContent = "The sharer stopped sharing."; clearInterval(statsTimer); },
-    error: msg => { $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message; }
-  });
-  ws.onopen = () => send({ type:"join", code });
+    "room-ended": () => roomEnded(),
+    "host-left": () => roomEnded(),
+    error: msg => {
+      if (rejoinMode === "guest") { bailHome("That room has ended."); return; }
+      if (/not found/i.test(msg.message || "")) clearSession();
+      $("guestDot").className = "dot err"; $("guestStatus").textContent = msg.message;
+    }
+  };
 }
+
+/* Leaving is final: the saved session is cleared, so a refresh
+   afterwards lands on the home screen instead of rejoining. The
+   socket close tells the server immediately, so the other side
+   hears about it straight away — no 20-second lag. */
+let leaving = false;
+function bailHome(notice){
+  if (leaving) return; leaving = true;
+  if (notice) setNotice(notice);
+  clearSession();
+  closeWS();
+  clearInterval(statsTimer);
+  if (pc) { try { pc.close(); } catch {} pc = null; }
+  location.href = location.pathname;
+}
+function roomEnded(){
+  /* The streamer ended the stream — or vanished (tab closed,
+     crashed, network gone; the server notices the dropped socket
+     and says so): the room no longer exists, so the viewer is
+     taken out too, with a note on the home screen saying why. */
+  bailHome("The streamer ended the stream.");
+}
+function leaveRoom(){ bailHome(null); }
 $("btnWatch").onclick = startWatching;
-$("btnLeave").onclick = () => location.href = location.pathname;
+$("btnLeave").onclick = leaveRoom;
 /* Fullscreen buttons (tile toolbar + control bar, both stages) are wired in the ROOM CHROME block below. */
 $("playOverlay").onclick = () => { const v = $("remoteVideo"); v.play().then(() => { $("playOverlay").style.display = "none"; }).catch(() => {}); };
 $("remoteVideo").addEventListener("playing", () => { $("playOverlay").style.display = "none"; });
@@ -1511,6 +1722,19 @@ watchBtnLabel("btnVoiceHost", "in-voice", "Leave voice");
 watchBtnLabel("btnVoiceGuest", "in-voice", "Leave voice");
 watchBtnLabel("btnMuteHost", "muted", "Muted");
 watchBtnLabel("btnMuteGuest", "muted", "Muted");
+
+/* ---------- RESTORE on load: a refresh is not a leave ---------- */
+(function restoreSession(){
+  let notice = null;
+  try { notice = sessionStorage.getItem(SS_NOTICE); if (notice) sessionStorage.removeItem(SS_NOTICE); } catch {}
+  if (notice) { const n = $("homeNotice"); if (n) { n.textContent = notice; n.style.display = "block"; } }
+  if (TEST) return;
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(SS_KEY) || "null"); } catch {}
+  if (!saved || !saved.code) return;
+  if (saved.role === "host") rejoinAsHost(saved.code);
+  else if (saved.role === "guest") { $("code").value = saved.code; startWatching(true); }
+})();
 
 /* Automated end-to-end test entry points. */
 if (TEST && params.get("room")) startWatching();

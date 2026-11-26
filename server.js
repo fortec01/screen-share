@@ -170,11 +170,56 @@ wss.on("connection", (ws) => {
     if (msg.type === "join") {
       const room = rooms.get(msg.code);
       if (!room) { send(ws, { type: "error", message: "Room not found — check the code." }); return; }
-      if (room.guest) { send(ws, { type: "error", message: "That room already has a viewer." }); return; }
+      // A viewer whose previous socket is already dead (refresh,
+      // reconnect) reclaims the seat instead of being told the room
+      // is full. A live second viewer is still refused.
+      if (room.guest && room.guest !== ws && room.guest.readyState === 1) { send(ws, { type: "error", message: "That room already has a viewer." }); return; }
       room.guest = ws;
       myRoom = msg.code; myRole = "guest";
       send(ws, { type: "joined" });
       send(room.host, { type: "guest-joined" });
+      return;
+    }
+
+    if (msg.type === "host-rejoin") {
+      // A host whose page refreshed (or whose socket dropped and
+      // reconnected) re-claims its room code instead of starting over
+      // with a new one. If the room is gone — the usual case, since a
+      // host disconnect closes it — it is recreated under the same
+      // code so the host keeps its invite link.
+      const code = String(msg.code || "").toUpperCase();
+      if (!/^[A-Z0-9]{6}$/.test(code)) { send(ws, { type: "error", message: "Bad room code." }); return; }
+      const room = rooms.get(code);
+      if (room && room.host && room.host !== ws && room.host.readyState === 1) {
+        send(ws, { type: "error", message: "That room is already being hosted." });
+        return;
+      }
+      if (room) {
+        room.host = ws;
+      } else {
+        rooms.set(code, { host: ws, guest: null });
+      }
+      myRoom = code; myRole = "host";
+      send(ws, { type: "created", code });
+      // A viewer who is somehow still seated gets reconnected: the
+      // host treats this like a fresh guest-joined and re-offers.
+      if (room && room.guest) send(ws, { type: "guest-joined" });
+      return;
+    }
+
+    if (msg.type === "end-room") {
+      // The host pressed End: the room closes for everyone, now.
+      // The guest is told directly (not via the relay fallthrough)
+      // so it can leave even though the room is already deleted.
+      if (myRoom && myRole === "host") {
+        const room = rooms.get(myRoom);
+        if (room && room.host === ws) {
+          send(room.guest, { type: "room-ended" });
+          send(room.guest, { type: "host-left" });
+          rooms.delete(myRoom);
+        }
+        myRoom = null; myRole = null;
+      }
       return;
     }
 
@@ -189,10 +234,17 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     if (!myRoom || !rooms.has(myRoom)) return;
     const room = rooms.get(myRoom);
-    if (myRole === "host") {
+    // Identity guards: a stale socket closing late must never evict
+    // the fresh socket that already replaced it (refresh / reconnect).
+    if (myRole === "host" && room.host === ws) {
+      // The host vanished (tab closed, crash, network gone): the
+      // room is over — tell the guest at once so it can leave,
+      // instead of staring at a dead picture. "host-left" is sent
+      // too, for any older cached page that only knows that type.
+      send(room.guest, { type: "room-ended" });
       send(room.guest, { type: "host-left" });
       rooms.delete(myRoom);
-    } else if (myRole === "guest") {
+    } else if (myRole === "guest" && room.guest === ws) {
       room.guest = null;
       send(room.host, { type: "guest-left" });
     }

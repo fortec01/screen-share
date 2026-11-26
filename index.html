@@ -244,6 +244,87 @@
   #homeNotice{display:none; background:#fef3c7; border:1px solid #f0b429; color:#7c4a03; border-radius:10px; padding:10px 14px; font-size:14px; margin:0 0 14px;}
   #reshareOverlay{flex-direction:column; gap:10px;}
   #reshareOverlay button{margin:0;}
+
+  /* ================= Full dark mode + app-mode room =================
+     The whole site goes Discord-dark (home included). While a room is
+     open the page becomes the room: exactly 100dvh, no page scroll,
+     the video flexes to fill the space, the control bar is a floating
+     pill pinned at the bottom, and every tool lives in a slide-up
+     panel over the stage (Discord soundboard style) — the panel is
+     the only thing that ever scrolls. */
+  :root{
+    --bg:#1e1f22; --card:#2b2d31; --line:#26272b; --line2:#3f4147;
+    --text:#e3e5e8; --muted:#b5bac1; --faint:#949ba4; --accent:#5865F2;
+    --danger:#f23f43; color-scheme:dark;
+  }
+  .mark{background:var(--blurple);}
+  .navpill{border-color:#26272b; background:var(--d-panel); color:var(--d-muted);}
+  .card p{color:var(--muted);}
+  button:hover{background:#4752c4;}
+  button.alt{background:#4e5058;}
+  button.alt:hover{background:#6d6f78;}
+  button.ghost{background:#35373c; border-color:#26272b; color:var(--text);}
+  button.ghost:hover{background:#3f4147;}
+  button.danger{background:rgba(242,63,67,.12); border-color:rgba(242,63,67,.45); color:#ff8a8d;}
+  button.danger:hover{background:rgba(242,63,67,.2);}
+  input,select{background:#1e1f22; border-color:#141518; color:var(--text);}
+  input::placeholder{color:#6d6f78;}
+  input:focus,select:focus{border-color:rgba(88,101,242,.6); box-shadow:0 0 0 3px rgba(88,101,242,.18);}
+  .note{background:rgba(88,101,242,.14); border-color:rgba(88,101,242,.35); color:#c9cdf5;}
+  .note b{color:#fff;}
+  #homeNotice{background:rgba(240,178,41,.13); border-color:rgba(240,178,41,.5); color:#f5c66b;}
+  .footline,footer{color:var(--faint);}
+  body:has(.room.on){overflow:hidden;}
+  .wrap:has(.room.on){max-width:none; padding:0; height:100dvh;}
+  .wrap:has(.room.on) nav, .wrap:has(.room.on) .hero, .wrap:has(.room.on) .footline, .wrap:has(.room.on) footer{display:none;}
+  .stage.room.on{display:flex; flex-direction:column; height:100dvh; margin-top:0; border-radius:0; padding:10px 12px 12px;}
+  .room .room-topbar{flex:none;}
+  .room-flex{flex:1 1 auto; min-height:0; align-items:stretch;}
+  .room-main{position:relative; display:flex; flex-direction:column; min-height:0;}
+  .room .videobox{flex:1 1 auto; min-height:0;}
+  .room video{position:absolute; inset:0; width:100%; height:100%; max-height:none; object-fit:contain;}
+  @media (min-width:900px){ .chatpanel{position:static; height:auto; max-height:none;} }
+  .controlbar{flex:none; width:fit-content; max-width:calc(100% - 8px); margin:10px auto 2px; padding:8px 12px; gap:10px; background:var(--d-panel); border:1px solid #26272b; border-radius:999px; box-shadow:0 10px 28px rgba(0,0,0,.4); position:relative; z-index:30; flex-wrap:nowrap; overflow-x:auto; justify-content:safe center; scrollbar-width:none;}
+  .controlbar::-webkit-scrollbar{display:none;}
+  .voicestatus{flex:none;}
+  /* Slide-up tools panel (Discord soundboard style) */
+  .toolspanel{position:absolute; left:50%; bottom:112px; transform:translate(-50%,14px); width:min(680px,calc(100% - 16px)); max-height:min(60%,540px); background:var(--d-panel2); border:1px solid #26272b; border-radius:16px; box-shadow:0 18px 48px rgba(0,0,0,.55); display:flex; flex-direction:column; opacity:0; visibility:hidden; pointer-events:none; transition:opacity .18s ease, transform .18s ease, visibility 0s linear .18s; z-index:40;}
+  .toolspanel.open{opacity:1; visibility:visible; pointer-events:auto; transform:translate(-50%,0); transition:opacity .18s ease, transform .18s ease;}
+  .panelhead{display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 12px; box-shadow:0 1px 0 rgba(0,0,0,.35); flex:none;}
+  .paneltab{width:auto; margin:0; padding:7px 13px; border-radius:999px; background:transparent; color:var(--d-muted); font-size:13.5px; font-weight:600;}
+  .paneltab:hover{background:#3f4147; color:var(--d-bright);}
+  .paneltab.on{background:var(--blurple); color:#fff;}
+  .paneltab.on:hover{background:#4752c4;}
+  .panelx{margin:0 0 0 auto;}
+  .panelbody{overflow-y:auto; padding:14px; min-height:0;}
+  .toolspage{display:none; flex-direction:column; gap:12px;}
+  .toolspage.on{display:flex;}
+  .toolspage .reactbar, .toolspage .soundbar, .toolspage .drawtools, .toolspage .codebox, .toolspage .setrow{margin-top:0;}
+  .toolspage .drawtools{display:flex;}
+  @media (max-width:899px){ .toolspanel{bottom:106px; max-height:62%;} }
+  /* Waiting face: two avatars centred on the black stage until the
+     stream is live — the Discord voice-call look. */
+  .waitingface{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:14px; pointer-events:none; z-index:2;}
+  .wf-ava{width:84px; height:84px; border-radius:50%; background:var(--d-panel2); border:2px solid #3f4147; display:flex; align-items:center; justify-content:center; color:var(--d-muted);}
+  .wf-ava svg{width:40px; height:40px;}
+  .wf-ava.me{background:var(--blurple); color:#fff; border-color:transparent;}
+  .videobox:has(.dot.live) .waitingface{display:none;}
+  @media (max-width:899px){
+    .panelhead{flex-wrap:nowrap;}
+    .paneltab{padding:7px 10px; font-size:13px;}
+    /* The bar scrolls sideways on small screens — keep Leave/End in
+       the first screenful, the fun buttons one swipe away. */
+    #btnVoiceHost, #btnVoiceGuest{order:1;}
+    #btnMuteHost, #btnMuteGuest{order:2;}
+    #btnPointHost, #btnPointGuest{order:3;}
+    #hostStage [data-openpanel="draw"], #guestStage [data-openpanel="draw"]{order:4;}
+    #btnChatHost, #btnChatGuest{order:5;}
+    .controlbar .cbtn.leave{order:6;}
+    [data-openpanel="react"]{order:7;}
+    [data-openpanel="sounds"]{order:8;}
+    [data-openpanel="quality"]{order:9;}
+    .controlbar .fsbtn{order:10;}
+  }
 </style>
 </head>
 <body>
@@ -315,20 +396,40 @@
           <button type="button" class="cbtn" id="btnVoiceHost" title="Voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg><span class="blabel">Join voice</span></button>
           <button type="button" class="cbtn" id="btnMuteHost" style="display:none" title="Microphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><span class="blabel">Mic on</span></button>
           <button type="button" class="cbtn" id="btnPointHost" title="Laser pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-          <button type="button" class="cbtn" id="btnDrawHost" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+          <button type="button" class="cbtn" id="btnDrawHost" data-openpanel="draw" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
           <button type="button" class="cbtn" id="btnChatHost" data-chattoggle title="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="react" title="Reactions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="sounds" title="Soundboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 11v3M9.7 8v8M14.3 5v14M19 9.5v5"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="quality" title="More — quality and settings"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>
           <button type="button" class="cbtn fsbtn" data-fs title="Full screen" aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
           <button type="button" class="cbtn leave" id="btnStop" title="End the stream — closes the room for your viewer too"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="xlab">End stream</span></button>
         </div>
         <div class="voicestatus" id="voiceStatusHost">Voice off — join to talk over the share</div>
-        <div class="roomtools">
-          <div class="tlabel">Reactions</div>
-          <div class="reactbar" id="hostReactBar"></div>
-          <div class="soundbar" id="hostSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
-          <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span class="drawhint">Drag on the picture to draw — they see it live.</span></div>
-          <div class="tlabel">Invite — send them this code, or copy the link</div>
-          <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
-          <div class="setrow">
+        <div class="toolspanel" id="hostPanel">
+          <div class="panelhead">
+            <button type="button" class="paneltab on" data-tab="react">Reactions</button>
+            <button type="button" class="paneltab" data-tab="sounds">Sounds</button>
+            <button type="button" class="paneltab" data-tab="draw">Draw</button>
+            <button type="button" class="paneltab" data-tab="invite">Invite</button>
+            <button type="button" class="paneltab" data-tab="quality">Quality</button>
+            <button type="button" class="chatx panelx" data-panelclose aria-label="Close panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="panelbody">
+            <div class="toolspage on" data-page="react">
+              <div class="reactbar" id="hostReactBar"></div>
+            </div>
+            <div class="toolspage" data-page="sounds">
+              <div class="soundbar" id="hostSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
+            </div>
+            <div class="toolspage" data-page="draw">
+              <div class="drawtools" id="hostDrawTools"><button class="ghost clearbtn" id="hostDrawClear">Clear drawing</button><span class="drawhint">Drag on the picture to draw — they see it live.</span></div>
+            </div>
+            <div class="toolspage" data-page="invite">
+              <div class="tlabel">Invite — send them this code, or copy the link</div>
+              <div class="codebox"><div class="code" id="roomCode">······</div><button class="ghost" id="btnCopy">Copy link</button></div>
+            </div>
+            <div class="toolspage" data-page="quality">
+              <div class="setrow">
             <div class="setfield">
               <label for="qualityLive">Quality — change it any time, it applies live</label>
               <select id="qualityLive">
@@ -350,8 +451,10 @@
               </select>
             </div>
           </div>
-          <div class="hint" id="qualityNote"></div>
-          <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
+              <div class="hint" id="qualityNote"></div>
+              <p class="hint">Tip: in the browser's picker, choose <b>Entire screen</b> or a <b>Tab</b> and tick <b>Share audio</b> if you want them to hear sound too (Chrome on a computer). Keep this tab open while sharing.</p>
+            </div>
+          </div>
         </div>
       </div>
       <div class="chatbackdrop" data-chatbackdrop></div>
@@ -377,6 +480,7 @@
           <div class="reactlayer" id="guestReactLayer"></div>
           <div class="pointerlayer" id="guestPointerLayer"></div>
           <canvas class="drawcanvas" id="guestDrawCanvas"></canvas>
+          <div class="waitingface"><div class="wf-ava me"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.9 0-8 2-8 5v1h16v-1c0-3-4.1-5-8-5z"/></svg></div><div class="wf-ava"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.9 0-8 2-8 5v1h16v-1c0-3-4.1-5-8-5z"/></svg></div></div>
           <div class="playoverlay" id="playOverlay" style="display:none"><span class="playbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span><span>Tap to play</span></div>
           <div class="tilelabel"><span class="livebadge">LIVE</span><span class="tile-name">Them</span></div>
           <div class="tiletools"><button type="button" class="tiletool fsbtn" data-fs aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button></div>
@@ -385,18 +489,35 @@
           <button type="button" class="cbtn" id="btnVoiceGuest" title="Voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v4M8 23h8"/></svg><span class="blabel">Join voice</span></button>
           <button type="button" class="cbtn" id="btnMuteGuest" style="display:none" title="Microphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg><span class="blabel">Mic on</span></button>
           <button type="button" class="cbtn" id="btnPointGuest" title="Laser pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
-          <button type="button" class="cbtn" id="btnDrawGuest" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
+          <button type="button" class="cbtn" id="btnDrawGuest" data-openpanel="draw" title="Draw on the picture"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>
           <button type="button" class="cbtn" id="btnChatGuest" data-chattoggle title="Chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="react" title="Reactions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="sounds" title="Soundboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 11v3M9.7 8v8M14.3 5v14M19 9.5v5"/></svg></button>
+          <button type="button" class="cbtn" data-openpanel="quality" title="More — quality and settings"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>
           <button type="button" class="cbtn fsbtn" id="btnFull" data-fs title="Full screen" aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button>
           <button type="button" class="cbtn leave" id="btnLeave" title="Leave this room"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 9c-1.6 0-3.22.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.96.74-2.94.74a2 2 0 0 1-2-2v-2.4C2 9.68 6.32 4.5 12 4.5S22 9.68 22 12.32v2.33c0 1.1-.9 2-2 2-.98 0-1.96-.25-2.94-.74a1.13 1.13 0 0 1-.56-.9v-3.1C15.22 9.25 13.6 9 12 9z"/></svg><span class="xlab">Leave room</span></button>
         </div>
         <div class="voicestatus" id="voiceStatusGuest">Voice off — join to talk over the share</div>
-        <div class="roomtools">
-          <div class="tlabel">Reactions</div>
-          <div class="reactbar" id="guestReactBar"></div>
-          <div class="soundbar" id="guestSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
-          <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span class="drawhint">Drag on the picture to draw — they see it live.</span></div>
-          <div class="setrow">
+        <div class="toolspanel" id="guestPanel">
+          <div class="panelhead">
+            <button type="button" class="paneltab on" data-tab="react">Reactions</button>
+            <button type="button" class="paneltab" data-tab="sounds">Sounds</button>
+            <button type="button" class="paneltab" data-tab="draw">Draw</button>
+            <button type="button" class="paneltab" data-tab="quality">Quality</button>
+            <button type="button" class="chatx panelx" data-panelclose aria-label="Close panel"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+          </div>
+          <div class="panelbody">
+            <div class="toolspage on" data-page="react">
+              <div class="reactbar" id="guestReactBar"></div>
+            </div>
+            <div class="toolspage" data-page="sounds">
+              <div class="soundbar" id="guestSoundBar"><span class="slabel tlabel">Sounds — tap one, you both hear it</span></div>
+            </div>
+            <div class="toolspage" data-page="draw">
+              <div class="drawtools" id="guestDrawTools"><button class="ghost clearbtn" id="guestDrawClear">Clear drawing</button><span class="drawhint">Drag on the picture to draw — they see it live.</span></div>
+            </div>
+            <div class="toolspage" data-page="quality">
+              <div class="setrow">
             <div class="setfield">
               <label for="qualityAsk">Picture quality — the sharer's computer sends it, but you can ask for more</label>
               <select id="qualityAsk">
@@ -408,8 +529,10 @@
               </select>
             </div>
           </div>
-          <div class="hint" id="qualityAskNote"></div>
-          <p class="hint">If the picture is frozen or black for more than ~20 seconds, the connection may be blocked by a strict network on one side — try a different Wi-Fi or mobile data on one end.</p>
+              <div class="hint" id="qualityAskNote"></div>
+              <p class="hint">If the picture is frozen or black for more than ~20 seconds, the connection may be blocked by a strict network on one side — try a different Wi-Fi or mobile data on one end.</p>
+            </div>
+          </div>
         </div>
       </div>
       <div class="chatbackdrop" data-chatbackdrop></div>
@@ -1649,6 +1772,7 @@ function enterHostStage(stream){
   localStream = stream;
   $("home").style.display = "none";
   $("hostStage").classList.add("on");
+  const hp = $("hostPanel"); if (hp && hp._showTab) { hp._showTab("invite"); hp.classList.add("open"); }
   $("localVideo").srcObject = localStream;
   $("reshareOverlay").style.display = "none";
   const vt = localStream.getVideoTracks()[0];
@@ -1715,6 +1839,7 @@ function rejoinAsHost(code){
   rejoinMode = "host";
   $("home").style.display = "none";
   $("hostStage").classList.add("on");
+  const hp = $("hostPanel"); if (hp && hp._showTab) { hp._showTab("invite"); hp.classList.add("open"); }
   $("roomCode").textContent = code;
   document.title = "ROOM " + code;
   history.replaceState(null,"","?room="+code);
@@ -2005,6 +2130,38 @@ document.querySelectorAll("[data-chatbackdrop]").forEach(b => {
 if (window.matchMedia("(max-width: 899px)").matches) {
   document.querySelectorAll(".room").forEach(st => st.classList.remove("chat-open"));
 }
+/* Tools panel: control-bar tool buttons open a Discord-style
+   slide-up panel over the stage; its tabs switch pages. Pure
+   chrome — the tools inside keep their own wiring and IDs. */
+document.querySelectorAll(".toolspanel").forEach(panel => {
+  const tabs = panel.querySelectorAll("[data-tab]");
+  const pages = panel.querySelectorAll("[data-page]");
+  const show = name => {
+    tabs.forEach(t => t.classList.toggle("on", t.dataset.tab === name));
+    pages.forEach(p => p.classList.toggle("on", p.dataset.page === name));
+  };
+  tabs.forEach(t => t.addEventListener("click", () => show(t.dataset.tab)));
+  const x = panel.querySelector("[data-panelclose]");
+  if (x) x.addEventListener("click", () => panel.classList.remove("open"));
+  panel._showTab = show;
+});
+document.querySelectorAll("[data-openpanel]").forEach(b => {
+  b.addEventListener("click", () => {
+    const st = b.closest(".room"); if (!st) return;
+    const panel = st.querySelector(".toolspanel"); if (!panel || !panel._showTab) return;
+    const tab = b.dataset.openpanel;
+    const active = panel.querySelector("[data-tab].on");
+    if (panel.classList.contains("open") && active && active.dataset.tab === tab && tab !== "draw") {
+      panel.classList.remove("open");
+    } else {
+      panel._showTab(tab);
+      panel.classList.add("open");
+    }
+  });
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.querySelectorAll(".toolspanel.open").forEach(p => p.classList.remove("open"));
+});
 /* Fullscreen fix: buttons live ON the video tile (hover toolbar) and
    in the bottom control bar, for BOTH host and guest. They fullscreen
    the videobox wrapper — not the bare <video> — so the reaction,

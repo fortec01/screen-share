@@ -266,7 +266,7 @@
       <p>Pick a screen, tab or window and send the link to your viewer.</p>
       <label for="quality">Quality</label>
       <select id="quality">
-        <option value="auto">Auto (browser adapts)</option>
+        <option value="auto">Auto (smart ladder — steady steps)</option>
         <option value="720p30">720p · 30 fps — light (phones, slow data)</option>
         <option value="1080p30">1080p · 30 fps</option>
         <option value="1080p60" selected>1080p · 60 fps — smooth</option>
@@ -332,7 +332,7 @@
             <div class="setfield">
               <label for="qualityLive">Quality — change it any time, it applies live</label>
               <select id="qualityLive">
-                <option value="auto">Auto (browser adapts — can drop quality)</option>
+                <option value="auto">Auto (smart ladder — steady steps)</option>
                 <option value="720p30">720p · 30 fps — light (phones, slow data)</option>
                 <option value="1080p30">1080p · 30 fps</option>
                 <option value="1080p60" selected>1080p · 60 fps — smooth</option>
@@ -400,6 +400,7 @@
             <div class="setfield">
               <label for="qualityAsk">Picture quality — the sharer's computer sends it, but you can ask for more</label>
               <select id="qualityAsk">
+                <option value="auto">Auto (smart ladder)</option>
                 <option value="720p30">720p · 30 fps — light</option>
                 <option value="1080p30">1080p · 30 fps</option>
                 <option value="1080p60" selected>1080p · 60 fps — smooth</option>
@@ -562,7 +563,7 @@ document.addEventListener("visibilitychange", () => {
 async function hostIceRestart(){
   if (!pc || !localStream) return;
   try {
-    const o = await pc.createOffer({ iceRestart: true });
+    const o = mungeOpus(await pc.createOffer({ iceRestart: true }), SCREEN_OPUS);
     await pc.setLocalDescription(o);
     if (pc) send({ type:"offer", sdp: o });
   } catch {}
@@ -1088,6 +1089,43 @@ function tuneVoiceSender(){
       s.setParameters(p).catch(() => {});
     });
 }
+/* Voice receiver buffering: a conversation is not a one-way
+   stream, so the voice connection gets a SMALL target — 60 ms,
+   inside the 40–80 ms band NetEq holds on stable Wi-Fi and far
+   under the G.114 150 ms "feels natural" line. Not zero: starving
+   the buffer turns every jitter spike into a glitch. This is a
+   separate knob from the screen's 300 ms and the two never mix. */
+function tuneVoiceReceivers(recv){
+  const rs = recv ? [recv] : (vpc ? vpc.getReceivers() : []);
+  rs.forEach(r => {
+    try {
+      if ("jitterBufferTarget" in r) r.jitterBufferTarget = 60;
+      else if ("playoutDelayHint" in r) r.playoutDelayHint = 0.06;
+    } catch {}
+  });
+}
+/* Voice path numbers (RTT + jitter) in the status line while a
+   call is live — the same "make it measurable" idea as the screen
+   stats, at voice scale. */
+let vStatsTimer = null;
+function startVoiceStats(){
+  clearInterval(vStatsTimer);
+  vStatsTimer = setInterval(async () => {
+    if (!vpc || vpc.connectionState !== "connected") return;
+    try {
+      const stats = await vpc.getStats();
+      let rtt = null, jit = null;
+      stats.forEach(s => {
+        if (s.type === "candidate-pair" && s.state === "succeeded" && typeof s.currentRoundTripTime === "number")
+          rtt = Math.round(s.currentRoundTripTime * 1000);
+        if (s.type === "inbound-rtp" && s.kind === "audio" && typeof s.jitter === "number")
+          jit = Math.round(s.jitter * 1000);
+      });
+      window.__voiceStats = { rtt, jitter: jit };
+      if (rtt !== null && vJoined) setVoiceStatus(`Voice connected — ${rtt} ms · jitter ${jit === null ? "–" : jit} ms`);
+    } catch {}
+  }, 2000);
+}
 function newVoicePeer(){
   if (vpc) { try { vpc.close(); } catch {} }
   vRemoteReady = false;
@@ -1095,19 +1133,22 @@ function newVoicePeer(){
   vpc = new RTCPeerConnection(iceConfig);
   vpc.onicecandidate = e => { if (e.candidate) send({ type: "voice-ice", candidate: e.candidate }); };
   vpc.ontrack = e => {
+    tuneVoiceReceivers(e.receiver);
     const a = $("voiceAudio");
     a.srcObject = e.streams[0];
     if (a.play) a.play().catch(() => {});
     setVoiceStatus("Voice connected — you're talking live");
   };
   vpc.onconnectionstatechange = () => {
+    if (vpc && vpc.connectionState === "connected") tuneVoiceReceivers();
     if (vpc && vpc.connectionState === "failed")
       setVoiceStatus("Voice connection failed — a strict network blocked it");
   };
+  startVoiceStats();
 }
 async function voiceOffer(){
   if (!vpc) return;
-  const o = await vpc.createOffer();
+  const o = mungeOpus(await vpc.createOffer(), VOICE_OPUS);
   await vpc.setLocalDescription(o);
   send({ type: "voice-offer", sdp: o });
 }
@@ -1120,7 +1161,7 @@ async function joinVoice(){
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
     });
   } catch (e) {
     setVoiceStatus("Mic blocked — allow microphone access in the browser to talk");
@@ -1150,8 +1191,12 @@ async function joinVoice(){
     tuneVoiceSender();
     send({ type: "voice-renegotiate" });
   }
+  /* The receivers exist once tracks are added — set the voice
+     jitter target now rather than waiting for the first track. */
+  tuneVoiceReceivers();
 }
 function leaveVoice(sendIt){
+  clearInterval(vStatsTimer);
   if (vStream) { vStream.getTracks().forEach(tr => tr.stop()); vStream = null; }
   if (vpc) { try { vpc.close(); } catch {} vpc = null; }
   vJoined = false;
@@ -1196,7 +1241,7 @@ async function handleVoiceOffer(msg){
   }
   await vpc.setRemoteDescription(msg.sdp);
   await flushVoiceIce();
-  const ans = await vpc.createAnswer();
+  const ans = mungeOpus(await vpc.createAnswer(), VOICE_OPUS);
   await vpc.setLocalDescription(ans);
   send({ type: "voice-answer", sdp: ans });
   setVoiceStatus(vJoined ? "Voice connecting…" : "They joined voice — tap Join voice to talk back");
@@ -1234,10 +1279,124 @@ function preferCodecs(transceiver){
   } catch {}
 }
 
-function tuneSender(stream){
+/* ---------- OPUS SDP TUNING ---------- */
+/* There is still no JS API for Opus fmtp parameters in 2026 — even
+   LiveKit does string surgery — so offers and answers are edited
+   directly: find the Opus payload type from its rtpmap line, then
+   set keys on its fmtp line (adding the line if the browser left
+   it out). fmtp values are the RECEIVER's declared preferences
+   (RFC 7587): our offer tells the far encoder what to send us, and
+   our answer is what actually steers the far encoder — so both
+   directions are stamped, on every (re)negotiation path.
+   SCREEN_OPUS: the shared system audio is music/film, not a voice:
+   stereo at a real bitrate. VOICE_OPUS: DTX on, so a silent mic
+   sends almost nothing and leaves the uplink to the picture.
+   (Chrome already advertises useinbandfec=1 and minptime=10 by
+   default, so "turn on FEC" would be a no-op; stereo stays off
+   for voice — the 64 kbps sender cap does that job.) */
+const SCREEN_OPUS = { stereo: 1, "sprop-stereo": 1, maxaveragebitrate: 128000 };
+const VOICE_OPUS = { usedtx: 1 };
+function mungeOpus(desc, params){
+  if (!desc || typeof desc.sdp !== "string") return desc;
+  const lines = desc.sdp.split("\r\n");
+  let pt = null, rtpIdx = -1;
+  lines.forEach((l, i) => {
+    const m = l.match(/^a=rtpmap:(\d+) opus\/48000/i);
+    if (m && pt === null) { pt = m[1]; rtpIdx = i; }
+  });
+  if (pt === null) return desc;
+  const prefix = "a=fmtp:" + pt + " ";
+  const fi = lines.findIndex(l => l.startsWith(prefix));
+  const kv = new Map();
+  if (fi >= 0) {
+    for (const part of lines[fi].slice(prefix.length).split(";")) {
+      const p = part.trim();
+      if (!p) continue;
+      const eq = p.indexOf("=");
+      if (eq > 0) kv.set(p.slice(0, eq).trim(), p.slice(eq + 1).trim());
+      else kv.set(p, "");
+    }
+  }
+  for (const k of Object.keys(params)) kv.set(k, String(params[k]));
+  const body = [...kv.entries()].map(([k, v]) => v === "" ? k : k + "=" + v).join(";");
+  if (fi >= 0) lines[fi] = prefix + body;
+  else lines.splice(rtpIdx + 1, 0, prefix + body);
+  return { type: desc.type, sdp: lines.join("\r\n") };
+}
+
+/* ---------- SMART AUTO LADDER ---------- */
+/* "Auto" used to mean: hand Chrome's estimator a ceiling and let
+   the picture roam — 480p one minute, 1080p the next. The ladder
+   replaces that with our own controller, the shape production ABR
+   (and RustDesk's QoS engine) converged on: poll the candidate
+   pair's availableOutgoingBitrate once a second and step through
+   the existing tiers with asymmetric hysteresis —
+     · DOWN fast: 2 consecutive polls under 80% of the current
+       tier's bitrate -> one tier down (a freeze costs more than
+       an over-correction);
+     · UP slow: the estimate must clear the NEXT tier's bitrate by
+       20% for 4 consecutive polls -> one tier up;
+     · a 3-poll dwell after every change, so a noisy estimate
+       hovering on a boundary cannot make it oscillate.
+   consider() is a pure per-poll state machine (the 1 s timer just
+   feeds it the live estimate), which is what the automated tests
+   drive with simulated sequences. */
+const LADDER_TIERS = ["720p30", "1080p30", "1080p60", "1440p30", "1440p60", "2160p30", "2160p60"];
+const LADDER = {
+  idx: 2, timer: null, lowPolls: 0, highPolls: 0, dwell: 0, est: 0, changes: 0,
+  consider(est){
+    this.est = est;
+    if (typeof est !== "number" || !(est > 0)) { this.lowPolls = 0; this.highPolls = 0; return; }
+    if (this.dwell > 0) { this.dwell--; this.lowPolls = 0; this.highPolls = 0; return; }
+    const cur = QUALITY[LADDER_TIERS[this.idx]];
+    const nxt = QUALITY[LADDER_TIERS[this.idx + 1]];
+    if (this.idx > 0 && est < cur.br * 0.8) {
+      this.highPolls = 0;
+      if (++this.lowPolls >= 2) this.step(-1);
+      return;
+    }
+    this.lowPolls = 0;
+    if (nxt && est >= nxt.br * 1.2) {
+      if (++this.highPolls >= 4) this.step(1);
+      return;
+    }
+    this.highPolls = 0;
+  },
+  step(d){
+    this.idx += d;
+    this.lowPolls = 0; this.highPolls = 0; this.dwell = 3; this.changes++;
+    if (localStream) tuneSender(localStream, LADDER_TIERS[this.idx]);
+  }
+};
+function startLadder(){
+  if (LADDER.timer) return;
+  LADDER.idx = 2; LADDER.lowPolls = 0; LADDER.highPolls = 0; LADDER.dwell = 0;
+  if (localStream) tuneSender(localStream, LADDER_TIERS[LADDER.idx]);
+  LADDER.timer = setInterval(async () => {
+    if (!pc) return;
+    try {
+      const stats = await pc.getStats();
+      let est = null;
+      stats.forEach(s => {
+        if (s.type === "candidate-pair" && s.state === "succeeded" && typeof s.availableOutgoingBitrate === "number")
+          est = s.availableOutgoingBitrate;
+      });
+      if (est !== null) LADDER.consider(est);
+    } catch {}
+  }, 1000);
+}
+function stopLadder(){
+  if (LADDER.timer) { clearInterval(LADDER.timer); LADDER.timer = null; }
+}
+window.__ladder = LADDER;
+
+function tuneSender(stream, tierOverride){
   /* Reads the LIVE selects on the host stage, so changing quality
-     mid-share re-tunes the running stream without a restart. */
-  const q = QUALITY[$("qualityLive").value];
+     mid-share re-tunes the running stream without a restart. With
+     tierOverride (the ladder driving) that tier is applied instead
+     of whatever the select says. */
+  const selVal = $("qualityLive").value;
+  const q = QUALITY[tierOverride || selVal];
   const track = stream.getVideoTracks()[0];
   if (!track) return;
   const motion = $("modeLive").value === "motion";
@@ -1250,39 +1409,140 @@ function tuneSender(stream){
     if (!sender) return;
     const p = sender.getParameters();
     if (!p.encodings || !p.encodings.length) p.encodings = [{}];
-    if (q) {
-      p.encodings[0].maxBitrate = q.br; p.encodings[0].maxFramerate = q.fps;
+    /* The effective tier is re-derived at apply time: the ladder
+       may have started or stepped since this call was scheduled,
+       and its word goes over a stale captured value. */
+    const lad = !!tierOverride || !!LADDER.timer;
+    const effQ = lad ? QUALITY[LADDER_TIERS[LADDER.idx]] : q;
+    if (effQ) {
+      /* Bitrate cap: a fixed pick caps at its own tier. The ladder
+         keeps ONE TIER OF HEADROOM above its current step: GCC can
+         only measure traffic that is actually sent, so clamping to
+         the current tier would blind the estimator and trap the
+         ladder at the bottom (the ratchet trap). Resolution and
+         fps do the steering; bitrate is allowed to probe. */
+      const nxtQ = QUALITY[LADDER_TIERS[LADDER.idx + 1]];
+      p.encodings[0].maxBitrate = lad ? (nxtQ ? nxtQ.br : Math.floor(effQ.br * 1.25)) : effQ.br;
+      p.encodings[0].maxFramerate = effQ.fps;
       /* Bitrate floor: without one, the estimator can starve the
          stream to near-zero on a bad relay minute and never climb
          back. A floor at ~35% of the tier keeps the picture alive. */
-      p.encodings[0].minBitrate = Math.floor(q.br * 0.35);
+      p.encodings[0].minBitrate = Math.floor(effQ.br * 0.35);
       /* Hold the chosen resolution: without this, Chrome's bandwidth
          estimator shrinks the picture hard on relay paths (it can drop
          to 320x180 in the first minute). With it pinned, the browser
-         adapts bitrate/fps instead of the picture size. */
+         adapts bitrate/fps instead of the picture size. The ladder
+         additionally sets scaleResolutionDownTo (Chrome 131+) —
+         absolute dimensions, so a step lands exactly on the tier;
+         browsers without it ignore the unknown member and the
+         applyConstraints cap above does the same job. A fixed pick
+         deletes any downTo a previous ladder run left behind. */
+      if (lad) p.encodings[0].scaleResolutionDownTo = { maxWidth: effQ.w, maxHeight: effQ.h };
+      else delete p.encodings[0].scaleResolutionDownTo;
       p.encodings[0].scaleResolutionDownBy = 1;
     } else {
-      /* Auto still gets a floor and a sane ceiling, so "auto" can
-         adapt without collapsing to a thumbnail. */
+      /* Auto before the ladder's first step lands (one transient
+         tick): a floor and a sane ceiling, so it can't collapse
+         to a thumbnail in the meantime. */
       p.encodings[0].maxBitrate = 25_000_000;
       p.encodings[0].minBitrate = 1_000_000;
       delete p.encodings[0].scaleResolutionDownBy;
+      delete p.encodings[0].scaleResolutionDownTo;
     }
     p.degradationPreference = motion ? "maintain-framerate" : "maintain-resolution";
     sender.setParameters(p).catch(()=>{});
+    /* The screen's audio sender gets its real bitrate too — the
+       fmtp asks for 128 kbps stereo; this is the cap that lets
+       Chromium actually spend it (setParameters works for audio). */
+    const aSender = pc && pc.getSenders().find(s => s.track && s.track.kind === "audio");
+    if (aSender) {
+      try {
+        const ap = aSender.getParameters();
+        if (!ap.encodings || !ap.encodings.length) ap.encodings = [{}];
+        ap.encodings[0].maxBitrate = 128000;
+        aSender.setParameters(ap).catch(()=>{});
+      } catch {}
+    }
   };
   apply(); setTimeout(apply, 400); setTimeout(apply, 1500); setTimeout(apply, 4000);
+  /* Mode management: a fixed pick stops the ladder; Auto starts
+     it. (Ladder-driven calls pass tierOverride and skip this.) */
+  if (!tierOverride) {
+    if (QUALITY[selVal]) stopLadder();
+    else if (localStream) startLadder();
+  }
 }
 
-/* Low-latency playback on the receiving side. */
-function tuneReceivers(){
+/* Screen receiver buffering. Watching is one-way, so unlike the
+   voice call this side can afford to hold media briefly: a ~300 ms
+   jitter buffer gives NACK retransmissions time to land before a
+   frame is due, turning freezes into brief softness (the
+   webrtc.wiki freeze guide's recommendation for one-way streams —
+   we previously forced 0, the worst setting on a relayed path).
+   The target adapts AIMD-style from the stats we already collect:
+   a freeze pushes it up 100 ms (cap 600), ~30 clean seconds ease
+   it back down 50 ms (floor 150). Browsers without
+   jitterBufferTarget get the same idea via playoutDelayHint
+   (which is in seconds). The voice connection is NEVER touched
+   here — it has its own small target (see tuneVoiceReceivers). */
+const JB = { target: 300, min: 150, max: 600, lastFreezes: null, cleanPolls: 0 };
+function applyJitterTarget(){
+  if (!pc) return;
   try {
     pc.getReceivers().forEach(r => {
-      if ("playoutDelayHint" in r) r.playoutDelayHint = 0;
-      if ("jitterBufferTarget" in r) r.jitterBufferTarget = 0;
+      if ("jitterBufferTarget" in r) { try { r.jitterBufferTarget = JB.target; } catch {} }
+      else if ("playoutDelayHint" in r) r.playoutDelayHint = JB.target / 1000;
     });
   } catch {}
 }
+function tuneReceivers(){ applyJitterTarget(); }
+function adaptJitter(s){
+  if (typeof s.freezeCount !== "number") return;
+  if (JB.lastFreezes === null) { JB.lastFreezes = s.freezeCount; return; }
+  const froze = s.freezeCount > JB.lastFreezes;
+  JB.lastFreezes = s.freezeCount;
+  if (froze) {
+    JB.cleanPolls = 0;
+    if (JB.target < JB.max) { JB.target = Math.min(JB.max, JB.target + 100); applyJitterTarget(); }
+  } else if (++JB.cleanPolls >= 15) {
+    JB.cleanPolls = 0;
+    if (JB.target > JB.min) { JB.target = Math.max(JB.min, JB.target - 50); applyJitterTarget(); }
+  }
+}
+window.__jitter = JB;
+
+/* Stall rescue: a stream can die silently — connection still
+   "connected", picture frozen forever (a relay path that stopped
+   forwarding, a sender that wedged). If no new frame arrives for
+   ~6 s AND freezes are being counted in that window (a genuinely
+   static screen keeps frames flowing and counts no freezes, so it
+   never triggers this), ask the host for an ICE restart through
+   the existing want-ice-restart path. 30 s cooldown, and never
+   while the host is away in its grace window. */
+const STALL = { lastFrames: null, stillPolls: 0, freezeStart: null, lastFreezes: null, lastRescue: 0 };
+function watchStall(s){
+  if (!pc || pc.connectionState !== "connected" || hostAway) {
+    STALL.stillPolls = 0; STALL.lastFrames = null; STALL.freezeStart = null;
+    return;
+  }
+  const fr = s.framesReceived, fc = s.freezeCount;
+  if (typeof fr !== "number") return;
+  if (STALL.lastFrames !== null && fr <= STALL.lastFrames) {
+    if (STALL.stillPolls === 0) STALL.freezeStart = (typeof fc === "number" ? fc : null);
+    STALL.stillPolls++;
+  } else {
+    STALL.stillPolls = 0; STALL.freezeStart = null;
+  }
+  STALL.lastFrames = fr;
+  const freezesClimbed = STALL.freezeStart !== null && typeof fc === "number" && fc > STALL.freezeStart;
+  if (STALL.stillPolls >= 3 && freezesClimbed && Date.now() - STALL.lastRescue > 30000) {
+    STALL.lastRescue = Date.now();
+    STALL.stillPolls = 0; STALL.freezeStart = null;
+    send({ type: "want-ice-restart" });
+    $("guestStatus").textContent = "Stream stalled — asking for a reconnect…";
+  }
+}
+window.__stall = STALL;
 
 /* Live stats (fps / bitrate / resolution) shown on both sides,
    and exposed on window.__stats for automated end-to-end tests. */
@@ -1293,6 +1553,20 @@ function startStats(el){
     if (!pc) return;
     try {
       const stats = await pc.getStats();
+      /* Connection path + RTT from the selected candidate pair:
+         "direct" means the two browsers found each other; "relay"
+         means a TURN server is carrying the stream (longer path,
+         usually the reason quality dips). This is what turns a
+         future "it's lagging" into a measurable fact. */
+      let path = null, rtt = null;
+      stats.forEach(s => {
+        if (s.type === "candidate-pair" && s.state === "succeeded" && (s.nominated || s.selected)) {
+          const lc = stats.get(s.localCandidateId), rc = stats.get(s.remoteCandidateId);
+          path = (lc && lc.candidateType === "relay") || (rc && rc.candidateType === "relay") ? "relay" : "direct";
+          if (typeof s.currentRoundTripTime === "number") rtt = Math.round(s.currentRoundTripTime * 1000);
+        }
+      });
+      const pathTxt = path ? ` · ${path}${rtt !== null ? " · " + rtt + " ms" : ""}` : "";
       stats.forEach(s => {
         if (s.type === "inbound-rtp" && s.kind === "video") {
           const now = performance.now();
@@ -1301,14 +1575,21 @@ function startStats(el){
           lastBytes = s.bytesReceived; lastTime = now;
           const out = { fps: Math.round(s.framesPerSecond || 0), mbps: +mbps.toFixed(2),
                         w: s.frameWidth || 0, h: s.frameHeight || 0,
-                        decoded: s.framesDecoded || 0, dropped: s.framesDropped || 0 };
+                        decoded: s.framesDecoded || 0, dropped: s.framesDropped || 0,
+                        freezes: s.freezeCount || 0, path, rtt, asked: $("qualityAsk") ? $("qualityAsk").value : null };
           window.__stats = out;
-          el.textContent = out.w ? `· ${out.w}×${out.h} · ${out.fps} fps · ${out.mbps} Mbps` : "";
+          adaptJitter(s);
+          watchStall(s);
+          el.textContent = out.w ? `· ${out.w}×${out.h} · ${out.fps} fps · ${out.mbps} Mbps${pathTxt} · asked ${out.asked}` : "";
         }
         if (s.type === "outbound-rtp" && s.kind === "video") {
-          const out = { fps: Math.round(s.framesPerSecond || 0), w: s.frameWidth || 0, h: s.frameHeight || 0, sent: s.bytesSent || 0 };
+          const out = { fps: Math.round(s.framesPerSecond || 0), w: s.frameWidth || 0, h: s.frameHeight || 0, sent: s.bytesSent || 0,
+                        qlr: s.qualityLimitationReason || "none", path, rtt };
           window.__stats = out;
-          el.textContent = out.w ? `· sending ${out.w}×${out.h} · ${out.fps} fps` : "";
+          /* qualityLimitationReason is the browser saying WHY fps
+             is capped (cpu / bandwidth) — surface it when it's
+             anything but "none" instead of guessing. */
+          el.textContent = out.w ? `· sending ${out.w}×${out.h} · ${out.fps} fps${pathTxt}${out.qlr !== "none" ? " · encoder limited (" + out.qlr + ")" : ""}` : "";
         }
       });
     } catch {}
@@ -1339,15 +1620,24 @@ function makeTestStream(){
 /* ---------- HOST ---------- */
 async function captureScreen(qualityValue){
   const q0 = QUALITY[qualityValue];
+  if (TEST) return makeTestStream();
+  const video = q0
+    ? { width: { ideal: q0.w }, height: { ideal: q0.h }, frameRate: { ideal: q0.fps, max: q0.fps }, resizeMode: "none" }
+    : { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" };
+  /* The shared system audio is a film/video soundtrack, not a
+     voice: Chromium turns echo cancellation, noise suppression and
+     auto gain ON for display audio, which mangles music. Ask for
+     it raw. A browser that rejects constraints on display audio
+     (OverconstrainedError / TypeError) gets one retry with the
+     plain request — but a cancelled picker (NotAllowedError) is
+     never retried, that would just re-prompt. */
+  const rawAudio = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
   try {
-    return TEST ? makeTestStream()
-      : await navigator.mediaDevices.getDisplayMedia({
-          video: q0
-            ? { width: { ideal: q0.w }, height: { ideal: q0.h }, frameRate: { ideal: q0.fps, max: q0.fps }, resizeMode: "none" }
-            : { frameRate: { ideal: 60, max: 60 }, resizeMode: "none" },
-          audio: true
-        });
-  } catch {
+    return await navigator.mediaDevices.getDisplayMedia({ video, audio: rawAudio });
+  } catch (e) {
+    if (e && (e.name === "OverconstrainedError" || e.name === "TypeError")) {
+      try { return await navigator.mediaDevices.getDisplayMedia({ video, audio: true }); } catch {}
+    }
     $("shareErr").textContent = (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
       ? "Screen pick was cancelled — tap Start sharing and choose a screen to try again."
       : "This browser can't share its screen (see the note above).";
@@ -1398,7 +1688,7 @@ async function startHostPeer(){
           if (pc === myPc) { $("hostDot").className = "dot err"; $("hostStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
         }
       };
-      const offer = await myPc.createOffer();
+      const offer = mungeOpus(await myPc.createOffer(), SCREEN_OPUS);
       await myPc.setLocalDescription(offer);
       send({ type:"offer", sdp: offer });
 }
@@ -1477,15 +1767,17 @@ function hostHandlers(){
     "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
     "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
     "want-quality": msg => {
-      if (!QUALITY[msg.preset]) return;
+      if (msg.preset !== "auto" && !QUALITY[msg.preset]) return;
       $("qualityLive").value = msg.preset;
       if (localStream) tuneSender(localStream);
       const note = $("qualityNote");
-      note.textContent = "Your viewer asked for " + msg.preset.replace("p", "p · ") + " — applied.";
+      note.textContent = msg.preset === "auto"
+        ? "Your viewer asked for Auto (smart ladder) — applied."
+        : "Your viewer asked for " + msg.preset.replace("p", "p · ") + " — applied.";
       setTimeout(() => { if (note.textContent.startsWith("Your viewer")) note.textContent = ""; }, 6000);
     },
     "want-ice-restart": () => { hostIceRestart(); },
-    "guest-left": () => { guestPresent = false; $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); if (pc) { pc.close(); pc = null; } },
+    "guest-left": () => { guestPresent = false; $("hostDot").className = "dot wait"; $("hostStatus").textContent = "Viewer left. Waiting in case they come back…"; clearInterval(statsTimer); stopLadder(); if (pc) { pc.close(); pc = null; } },
     error: msg => {
       if (rejoinMode === "host") { bailHome("That room has ended."); return; }
       $("hostStatus").textContent = msg.message;
@@ -1534,6 +1826,7 @@ function endStream(){
      the server's grace window expiring ends the room anyway.) */
   if (session && session.role === "host") send({ type:"end-room" });
   clearSession();
+  stopLadder();
   closeWS();
   if (localStream) localStream.getTracks().forEach(t => t.stop());
   if (pc) { try { pc.close(); } catch {} pc = null; }
@@ -1613,9 +1906,15 @@ function guestHandlers(){
       await pc.setRemoteDescription(msg.sdp);
       guestOfferSeen = true;
       await flushIce();
-      const answer = await pc.createAnswer();
+      /* The answer's fmtp is what steers the HOST's audio encoder
+         (receiver-declared), so the stereo/128k ask goes here too. */
+      const answer = mungeOpus(await pc.createAnswer(), SCREEN_OPUS);
       await pc.setLocalDescription(answer);
       send({ type:"answer", sdp: answer });
+      /* Receivers exist from the remote description onward — set
+         the jitter buffer now, not only when the first track
+         lands, so it's in force before the first frame is due. */
+      tuneReceivers();
     },
     ice: async msg => { await addIce(msg.candidate); },
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },

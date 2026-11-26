@@ -13,6 +13,8 @@ for the site; the recordings themselves are otherwise unaltered.
 | Vine boom | Drama Boom — a thunder sheet struck by the author (original recreation of the vine boom) | modusmogulus | CC0 | https://freesound.org/people/modusmogulus/sounds/785925/ |
 | Metal pipe | Metal Pipe Falling on Concrete in Basement (field recording, 2010) | RutgerMuller | CC0 | https://freesound.org/people/RutgerMuller/sounds/104355/ |
 | Dun dun duuun | Dun Dun Duuun v.01 (dramatic sting) | divenorth | CC0 | https://freesound.org/people/divenorth/sounds/215558/ |
+| Anime wow | Cute Anime Girl "Wow" Sound Effect — the author's own voice-over | DarkNightPrincess | CC0 | https://freesound.org/people/DarkNightPrincess/sounds/658569/ |
+| Sad violin | Sad Violin (cue made in Soundtrap) | se2001 | CC0 | https://freesound.org/people/se2001/sounds/519062/ |
 | Quack | Mallard Duck Quacking | Mike Koenig | CC BY 3.0 | https://soundbible.com/1862-Mallard-Duck-Quacking.html |
 | Airhorn | Air Horn | Mike Koenig | CC BY 3.0 | https://soundbible.com/1542-Air-Horn.html |
 | Ba dum tss | Ba dum bum stings | eggsandwichent | CC0 | https://commons.wikimedia.org/wiki/File:Ba_dum_bum_stings.ogg |

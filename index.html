@@ -1529,8 +1529,9 @@ function endStream(){
      tells the viewer and deletes the room, and this page forgets
      the session, so a refresh afterwards lands on the home screen
      instead of resurrecting the room. (If the socket happens to be
-     mid-reconnect, closing it below still ends the room — the
-     server treats a vanished host the same way.) */
+     down when End is pressed, the end-room message can't get out —
+     but the session is cleared, so this host never rejoins, and
+     the server's grace window expiring ends the room anyway.) */
   if (session && session.role === "host") send({ type:"end-room" });
   clearSession();
   closeWS();
@@ -1565,7 +1566,15 @@ async function startWatching(fromRestore){
   connectWS(guestHandlers());
 }
 
+/* Guest-side lifecycle state: hostAway is set while the server is
+   holding the room in its grace window (the host's connection
+   dropped, but it may come back); guestOfferSeen marks that the
+   current peer has already negotiated one offer, so any further
+   offer must belong to a NEW host peer and this one gets rebuilt. */
+let hostAway = false, guestOfferSeen = false;
+
 function setupGuestPeer(){
+  guestOfferSeen = false;
   newPeer();
   const myPc = pc;
   pc.ontrack = e => {
@@ -1582,8 +1591,11 @@ function setupGuestPeer(){
   pc.onconnectionstatechange = () => {
     if (pc !== myPc) return; // a newer connection owns the status now
     window.__pcState = myPc.connectionState;
-    if (myPc.connectionState === "connected") { $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
-    if (myPc.connectionState === "failed") { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+    if (myPc.connectionState === "connected") { hostAway = false; $("guestDot").className = "dot live"; $("guestStatus").textContent = "Live — you're watching their screen."; tuneReceivers(); startStats($("guestStats")); }
+    if (myPc.connectionState === "failed" && !hostAway) { $("guestDot").className = "dot err"; $("guestStatus").textContent = "Connection failed — a strict network is blocking the direct link on one side."; }
+    /* While the host is away (grace window) a failed peer is
+       expected — the waiting message stays up, and the fresh offer
+       that arrives when the host returns rebuilds this peer. */
   };
 }
 
@@ -1591,8 +1603,15 @@ function guestHandlers(){
   return {
     joined: () => { rejoinMode = null; $("guestStatus").textContent = "In the room — waiting for the picture…"; },
     offer: async msg => {
-      if (!pc || pc.signalingState === "closed") setupGuestPeer();
+      /* A second offer on an already-negotiated peer means the
+         other side is a NEW peer connection — the host refreshed
+         and returned inside the grace window, and its old peer is
+         gone for good. Rebuild ours cleanly (setupGuestPeer closes
+         the old one) instead of layering the new offer over it, so
+         the returned stream can land without a manual refresh. */
+      if (!pc || pc.signalingState === "closed" || guestOfferSeen) setupGuestPeer();
       await pc.setRemoteDescription(msg.sdp);
+      guestOfferSeen = true;
       await flushIce();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
@@ -1610,6 +1629,23 @@ function guestHandlers(){
     "voice-ice": async msg => { if (!msg.candidate) return; if (vpc && vRemoteReady) { try { await vpc.addIceCandidate(msg.candidate); } catch {} } else vIceQueue.push(msg.candidate); },
     "voice-renegotiate": async () => { if (vpc && vOfferer) await voiceOffer(); },
     "voice-bye": () => { if (vpc) { try { vpc.close(); } catch {} vpc = null; } vOfferer = false; vRemoteReady = false; const a = $("voiceAudio"); if (a) a.srcObject = null; setVoiceStatus(vJoined ? "They left voice — you're still in" : "Voice off — join to talk over the share"); },
+    "host-away": () => {
+      /* The host's connection dropped; the server is holding the
+         room for a grace window in case it was only a refresh.
+         Stay in the room and wait — do NOT tear the session down.
+         The peer underneath will likely fail; that's expected, and
+         the fresh offer on the host's return rebuilds it. */
+      hostAway = true;
+      $("guestDot").className = "dot wait";
+      $("guestStatus").textContent = "Streamer lost connection — waiting for them to come back…";
+    },
+    "host-back": () => {
+      /* The host reclaimed the room inside the window: the wait is
+         over and a fresh offer is on its way. */
+      hostAway = false;
+      $("guestDot").className = "dot wait";
+      $("guestStatus").textContent = "Streamer's back — reconnecting…";
+    },
     "room-ended": () => roomEnded(),
     "host-left": () => roomEnded(),
     error: msg => {
@@ -1635,10 +1671,11 @@ function bailHome(notice){
   location.href = location.pathname;
 }
 function roomEnded(){
-  /* The streamer ended the stream — or vanished (tab closed,
-     crashed, network gone; the server notices the dropped socket
-     and says so): the room no longer exists, so the viewer is
-     taken out too, with a note on the home screen saying why. */
+  /* The streamer ended the stream — or vanished and stayed gone
+     past the server's grace window (the room is held briefly after
+     a dropped host socket, in case it was only a refresh): the
+     room no longer exists, so the viewer is taken out too, with a
+     note on the home screen saying why. */
   bailHome("The streamer ended the stream.");
 }
 function leaveRoom(){ bailHome(null); }

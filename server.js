@@ -15,6 +15,15 @@ const { WebSocketServer } = require("ws");
 const PORT = process.env.PORT || 8080;
 const PUBLIC = __dirname;
 
+// Grace window for a dropped HOST connection: if the host's socket
+// closes (refresh, crash, network loss) the room is held this long
+// for the host to come back before the guest is told it ended. An
+// explicit End stream never waits — it closes the room at once.
+const HOST_GRACE_MS = (() => {
+  const n = parseInt(process.env.HOST_GRACE_MS, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 30000;
+})();
+
 // TURN relay (coturn on the VPS) with short-lived credentials:
 // username = unix expiry, credential = base64(HMAC-SHA1(secret, username)).
 // The secret itself lives only in this service's env and on the relay.
@@ -143,7 +152,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 const wss = new WebSocketServer({ server });
-const rooms = new Map(); // code -> { host: ws|null, guest: ws|null }
+const rooms = new Map(); // code -> { host: ws|null, guest: ws|null, hostAway: bool, graceTimer: timer|null }
 
 function send(ws, obj) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
@@ -161,7 +170,7 @@ wss.on("connection", (ws) => {
       let code;
       do { code = Math.random().toString(36).slice(2, 8).toUpperCase(); }
       while (rooms.has(code));
-      rooms.set(code, { host: ws, guest: null });
+      rooms.set(code, { host: ws, guest: null, hostAway: false, graceTimer: null });
       myRoom = code; myRole = "host";
       send(ws, { type: "created", code });
       return;
@@ -177,6 +186,9 @@ wss.on("connection", (ws) => {
       room.guest = ws;
       myRoom = msg.code; myRole = "guest";
       send(ws, { type: "joined" });
+      // Joining (or re-joining after its own refresh) while the host
+      // is inside the grace window: start in the waiting state too.
+      if (room.hostAway) send(ws, { type: "host-away" });
       send(room.host, { type: "guest-joined" });
       return;
     }
@@ -184,9 +196,10 @@ wss.on("connection", (ws) => {
     if (msg.type === "host-rejoin") {
       // A host whose page refreshed (or whose socket dropped and
       // reconnected) re-claims its room code instead of starting over
-      // with a new one. If the room is gone — the usual case, since a
-      // host disconnect closes it — it is recreated under the same
-      // code so the host keeps its invite link.
+      // with a new one. Usually the room is still here, held by the
+      // grace window; if it is already gone (window expired, or the
+      // guest left meanwhile) it is recreated under the same code so
+      // the host keeps its invite link.
       const code = String(msg.code || "").toUpperCase();
       if (!/^[A-Z0-9]{6}$/.test(code)) { send(ws, { type: "error", message: "Bad room code." }); return; }
       const room = rooms.get(code);
@@ -195,9 +208,16 @@ wss.on("connection", (ws) => {
         return;
       }
       if (room) {
+        // The host made it back inside the grace window (or is
+        // replacing its own dead socket): cancel the pending
+        // room-end and tell the guest the wait is over.
+        const wasAway = room.hostAway;
+        if (room.graceTimer) { clearTimeout(room.graceTimer); room.graceTimer = null; }
+        room.hostAway = false;
         room.host = ws;
+        if (wasAway && room.guest) send(room.guest, { type: "host-back" });
       } else {
-        rooms.set(code, { host: ws, guest: null });
+        rooms.set(code, { host: ws, guest: null, hostAway: false, graceTimer: null });
       }
       myRoom = code; myRole = "host";
       send(ws, { type: "created", code });
@@ -214,6 +234,7 @@ wss.on("connection", (ws) => {
       if (myRoom && myRole === "host") {
         const room = rooms.get(myRoom);
         if (room && room.host === ws) {
+          if (room.graceTimer) { clearTimeout(room.graceTimer); room.graceTimer = null; }
           send(room.guest, { type: "room-ended" });
           send(room.guest, { type: "host-left" });
           rooms.delete(myRoom);
@@ -234,19 +255,40 @@ wss.on("connection", (ws) => {
   ws.on("close", () => {
     if (!myRoom || !rooms.has(myRoom)) return;
     const room = rooms.get(myRoom);
+    const code = myRoom;
     // Identity guards: a stale socket closing late must never evict
     // the fresh socket that already replaced it (refresh / reconnect).
     if (myRole === "host" && room.host === ws) {
-      // The host vanished (tab closed, crash, network gone): the
-      // room is over — tell the guest at once so it can leave,
-      // instead of staring at a dead picture. "host-left" is sent
-      // too, for any older cached page that only knows that type.
-      send(room.guest, { type: "room-ended" });
-      send(room.guest, { type: "host-left" });
-      rooms.delete(myRoom);
+      // The host vanished (tab closed, crash, network gone) — but a
+      // dropped socket is not the same as pressing End: hold the
+      // room for the grace window so a host that merely refreshed
+      // (or whose network blinked) can reclaim it, and put the
+      // guest into a waiting state meanwhile. Only when the window
+      // runs out is the room ended for the guest — with the same
+      // messages an explicit end sends ("host-left" too, for any
+      // older cached page that only knows that type).
+      room.host = null;
+      room.hostAway = true;
+      send(room.guest, { type: "host-away" });
+      if (room.graceTimer) clearTimeout(room.graceTimer);
+      room.graceTimer = setTimeout(() => {
+        room.graceTimer = null;
+        if (rooms.get(code) !== room || !room.hostAway) return;
+        send(room.guest, { type: "room-ended" });
+        send(room.guest, { type: "host-left" });
+        rooms.delete(code);
+      }, HOST_GRACE_MS);
+      if (room.graceTimer.unref) room.graceTimer.unref();
     } else if (myRole === "guest" && room.guest === ws) {
       room.guest = null;
       send(room.host, { type: "guest-left" });
+      // The guest left while the host was away: nobody is waiting
+      // for the host to come back, so there is nothing to hold —
+      // cancel the window and delete the room at once.
+      if (room.hostAway) {
+        if (room.graceTimer) { clearTimeout(room.graceTimer); room.graceTimer = null; }
+        rooms.delete(code);
+      }
     }
   });
 });

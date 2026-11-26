@@ -187,7 +187,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const q = new URL(req.url, "http://localhost").searchParams;
-    const type = q.get("type") === "stickers" ? "stickers" : "gifs";
+    const type = ["gifs", "stickers", "emojis"].includes(q.get("type")) ? q.get("type") : "gifs";
     const mode = q.get("mode") === "search" ? "search" : "trending";
     const query = (q.get("q") || "").slice(0, 60).trim();
     if (mode === "search" && !query) {

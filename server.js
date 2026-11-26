@@ -65,6 +65,41 @@ const ET_TURN_URLS = (process.env.ET_TURN_URLS || "turn:free.expressturn.com:347
 
 let turnCounter = 0;
 
+// GIF/sticker picker feed: Klipy (the library Discord uses). The API
+// key lives only in this service's env; the page receives a small
+// normalized list and hotlinks Klipy's CDN for the images themselves.
+// KLIPY_BASE exists so tests (and a future domain change) can point
+// the feed elsewhere.
+const KLIPY_API_KEY = process.env.KLIPY_API_KEY || "";
+const KLIPY_BASE = process.env.KLIPY_BASE || "https://api.klipy.com";
+const gifCache = new Map(); // type|mode|q|page -> { t, body }
+function gifRendition(file, sizes, kinds) {
+  if (!file) return null;
+  for (const s of sizes) {
+    const r = file[s];
+    if (!r) continue;
+    for (const k of kinds) {
+      if (r[k] && typeof r[k].url === "string" && (r[k].url.startsWith("https://") || /^http:\/\/(127\.0\.0\.1|localhost)/.test(r[k].url))) return r[k];
+    }
+  }
+  return null;
+}
+function normalizeGif(item) {
+  if (!item || !item.file) return null;
+  const full = gifRendition(item.file, ["hd", "md", "sm", "xs"], ["gif", "webp"]);
+  const prev = gifRendition(item.file, ["xs", "sm", "md", "hd"], ["webp", "gif"]);
+  if (!full && !prev) return null;
+  const main = full || prev;
+  return {
+    id: String(item.id || item.slug || main.url),
+    title: String(item.title || "").slice(0, 80),
+    preview: (prev || full).url,
+    url: main.url,
+    w: main.width || (prev && prev.width) || 0,
+    h: main.height || (prev && prev.height) || 0,
+  };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
@@ -143,6 +178,47 @@ const server = http.createServer(async (req, res) => {
       });
       fs.createReadStream(file).pipe(res);
     });
+    return;
+  }
+  if (url === "/gifs") {
+    if (!KLIPY_API_KEY) {
+      res.writeHead(501, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "gif search is not set up yet" }));
+      return;
+    }
+    const q = new URL(req.url, "http://localhost").searchParams;
+    const type = q.get("type") === "stickers" ? "stickers" : "gifs";
+    const mode = q.get("mode") === "search" ? "search" : "trending";
+    const query = (q.get("q") || "").slice(0, 60).trim();
+    if (mode === "search" && !query) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "empty search" }));
+      return;
+    }
+    const page = Math.min(5, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
+    const cacheKey = [type, mode, query, page].join("|");
+    const hit = gifCache.get(cacheKey);
+    if (hit && Date.now() - hit.t < 180000) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(hit.body);
+      return;
+    }
+    const up = KLIPY_BASE + "/api/v1/" + encodeURIComponent(KLIPY_API_KEY) + "/" + type + "/" + mode +
+      "?per_page=24&page=" + page + "&content_filter=medium" +
+      (mode === "search" ? "&q=" + encodeURIComponent(query) : "");
+    try {
+      const r = await fetch(up, { signal: AbortSignal.timeout(7000) });
+      if (!r.ok) throw new Error("upstream " + r.status);
+      const data = await r.json();
+      const items = ((((data || {}).data || {}).data) || []).map(normalizeGif).filter(Boolean);
+      const body = JSON.stringify({ items });
+      gifCache.set(cacheKey, { t: Date.now(), body });
+      res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=120" });
+      res.end(body);
+    } catch (e) {
+      res.writeHead(502, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "gif search failed" }));
+    }
     return;
   }
   if (url !== "/") { res.writeHead(404); res.end("not found"); return; }

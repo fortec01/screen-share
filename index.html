@@ -325,6 +325,42 @@
     [data-openpanel="quality"]{order:9;}
     .controlbar .fsbtn{order:10;}
   }
+
+  /* ================= Chat GIF/Sticker/Emoji picker =================
+     Discord-style: a GIF button and an emoji button in the chat row
+     open a picker inside the chat panel — tabs for GIFs, Stickers
+     and Emoji, a search box, and a scrolling grid. GIFs come from
+     Klipy via the server's /gifs feed (key stays server-side). */
+  .room .chatrow .gifbtn{width:auto; height:40px; padding:0 9px; margin:0; border-radius:8px; background:var(--d-input); color:var(--d-muted); font-size:11px; font-weight:800; letter-spacing:.5px; flex:none;}
+  .room .chatrow .gifbtn:hover{background:#43464d; color:var(--d-bright);}
+  .room .chatrow .emojibtn{width:40px; height:40px; padding:0; margin:0; border-radius:8px; background:var(--d-input); color:var(--d-muted); flex:none; display:flex; align-items:center; justify-content:center;}
+  .room .chatrow .emojibtn svg{width:20px; height:20px;}
+  .room .chatrow .emojibtn:hover{background:#43464d; color:var(--d-bright);}
+  .gifpicker{display:none; flex-direction:column; background:var(--d-panel); border-top:1px solid rgba(0,0,0,.35); flex:none; height:min(350px,48%); min-height:0;}
+  .gifpicker.open{display:flex;}
+  .gp-tabs{display:flex; align-items:center; gap:4px; padding:8px 10px 4px; flex:none;}
+  .gp-tabs [data-gptab]{width:auto; margin:0; padding:6px 12px; border-radius:8px; background:transparent; color:var(--d-muted); font-size:13.5px; font-weight:700;}
+  .gp-tabs [data-gptab]:hover{background:#35373c; color:var(--d-bright);}
+  .gp-tabs [data-gptab].on{background:#35373c; color:var(--d-bright);}
+  .gp-x{width:28px; height:28px; margin:0 0 0 auto; padding:0; border-radius:6px; background:transparent; color:var(--d-muted); display:flex; align-items:center; justify-content:center; flex:none;}
+  .gp-x:hover{background:#3f4147; color:var(--d-bright);}
+  .gp-x svg{width:15px; height:15px;}
+  .gp-search{display:flex; align-items:center; gap:8px; margin:6px 10px 8px; background:var(--d-bg); border:1px solid rgba(88,101,242,.55); border-radius:8px; padding:0 10px; flex:none;}
+  .gp-search svg{width:16px; height:16px; color:var(--d-faint); flex:none;}
+  .gp-search input{flex:1; border:0; background:transparent; padding:9px 0; color:var(--d-text); text-transform:none; letter-spacing:normal; text-align:left; font-family:inherit; font-weight:400; font-size:14px; box-shadow:none; outline:none; min-width:0;}
+  .gp-body{flex:1 1 auto; min-height:0; overflow-y:auto; padding:2px 10px 10px;}
+  .gp-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:6px;}
+  .gp-head{grid-column:1 / -1; font-size:11.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:var(--d-faint); padding:7px 2px 1px;}
+  .gp-item{width:auto; margin:0; padding:0; border:0; border-radius:8px; overflow:hidden; background:var(--d-input); aspect-ratio:1; cursor:pointer;}
+  .gp-item img{width:100%; height:100%; object-fit:cover; display:block;}
+  .gp-item:hover{outline:2px solid var(--blurple); outline-offset:-2px;}
+  .gp-emoji{display:none; grid-template-columns:repeat(6,1fr); gap:4px;}
+  .gp-emo{width:auto; margin:0; padding:6px 0; background:transparent; font-size:24px; line-height:1.25; border-radius:8px;}
+  .gp-emo:hover{background:#35373c;}
+  .gp-note{color:var(--d-faint); font-size:13px; line-height:1.55; padding:10px 2px;}
+  .gp-note:empty{display:none;}
+  .gp-foot{flex:none; text-align:right; font-size:11px; color:var(--d-faint); padding:4px 12px 8px;}
+  .chatmsg img.chatgif{display:block; width:100%; max-width:230px; height:auto; border-radius:10px; margin-top:4px; background:var(--d-input);}
 </style>
 </head>
 <body>
@@ -461,7 +497,13 @@
       <aside class="chatpanel">
         <div class="chathead"><span>Chat</span><button type="button" class="chatx" data-chatclose aria-label="Close chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
         <div class="chatlog" id="hostChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
-        <div class="chatrow"><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+                <div class="gifpicker" data-gifpicker>
+          <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+          <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
+          <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
+          <div class="gp-foot">GIFs by Klipy</div>
+        </div>
+<div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
     </div>
   </div>
@@ -539,7 +581,13 @@
       <aside class="chatpanel">
         <div class="chathead"><span>Chat</span><button type="button" class="chatx" data-chatclose aria-label="Close chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
         <div class="chatlog" id="guestChatLog"><div class="chatempty">Say hi — messages stay between you two and are gone when the room closes.</div></div>
-        <div class="chatrow"><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+                <div class="gifpicker" data-gifpicker>
+          <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+          <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
+          <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
+          <div class="gp-foot">GIFs by Klipy</div>
+        </div>
+<div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
     </div>
   </div>
@@ -757,6 +805,152 @@ function sendChat(inputEl){
 [["hostChatInput","hostChatSend"],["guestChatInput","guestChatSend"]].forEach(([inp, btn]) => {
   $(btn).onclick = () => sendChat($(inp));
   $(inp).addEventListener("keydown", e => { if (e.key === "Enter") sendChat($(inp)); });
+});
+
+function addChatGif(who, gif, mine){
+  const log = myChatLog();
+  if (!log) return;
+  const empty = log.querySelector(".chatempty");
+  if (empty) empty.remove();
+  const d = document.createElement("div");
+  d.className = "chatmsg" + (mine ? " mine" : "");
+  const w = document.createElement("span");
+  w.className = "who";
+  w.textContent = who;
+  const img = document.createElement("img");
+  img.className = "chatgif";
+  img.src = gif.url;
+  img.alt = gif.title || "GIF";
+  img.loading = "lazy";
+  if (gif.w && gif.h) { img.width = gif.w; img.height = gif.h; }
+  d.appendChild(w);
+  d.appendChild(img);
+  log.appendChild(d);
+  while (log.children.length > 100) log.firstChild.remove();
+  log.scrollTop = log.scrollHeight;
+}
+
+/* ---------- GIF / STICKER / EMOJI PICKER ---------- */
+/* One picker per chat panel. GIFs and stickers load from the
+   server's /gifs feed (Klipy); picking one sends it as a chat
+   message the other side renders inline. Emoji are plain unicode
+   and insert into the message box — no network needed. Recents
+   live in localStorage, like Discord's Frequently Used. */
+const GIF_RECENTS_KEY = "ss-gif-recents";
+function loadGifRecents(){
+  try { return JSON.parse(localStorage.getItem(GIF_RECENTS_KEY) || "[]"); } catch { return []; }
+}
+function saveGifRecent(item){
+  let r = loadGifRecents().filter(x => x.url !== item.url);
+  r.unshift({ id: item.id, title: item.title, preview: item.preview, url: item.url, w: item.w, h: item.h });
+  try { localStorage.setItem(GIF_RECENTS_KEY, JSON.stringify(r.slice(0, 12))); } catch {}
+}
+const PICKER_EMOJIS = "😀 😁 😂 🤣 😊 😍 😘 😎 🤩 🥳 😏 😌 😴 🤤 😜 🤪 😝 🤑 🤗 🤔 🤨 😐 😑 🙄 😬 🤐 😷 🤒 🤕 🥴 🥺 🥹 😢 😭 😱 😳 🥵 🥶 😈 👻 💀 🎃 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 ❣️ 💕 💯 ✨ 🔥 🎉 🎊 🎁 🍕 🍔 🍟 🌮 🍩 🍦 ☕ 🍺 ⚽ 🏀 🎮 🎧 🚗 ✈️ 🌈 ⭐ 🌙 ☀️ 👍 👎 👏 🙏 💪 👀 🙈 🙉 🙊 🐶 🐱 🐼 🦊 🐸 🐵".split(" ");
+document.querySelectorAll(".chatpanel").forEach(panel => {
+  const picker = panel.querySelector("[data-gifpicker]");
+  if (!picker) return;
+  const input = panel.querySelector(".chatrow input");
+  const grid = picker.querySelector("[data-gpgrid]");
+  const emojiBox = picker.querySelector("[data-gpemoji]");
+  const note = picker.querySelector("[data-gpnote]");
+  const search = picker.querySelector("[data-gpsearch]");
+  const searchWrap = picker.querySelector(".gp-search");
+  let tab = "gifs", debounce = null, emojiBuilt = false;
+
+  function appendItems(items, heading){
+    if (heading) {
+      const h = document.createElement("div");
+      h.className = "gp-head";
+      h.textContent = heading;
+      grid.appendChild(h);
+    }
+    items.forEach(it => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "gp-item";
+      b.title = it.title || "";
+      const im = document.createElement("img");
+      im.src = it.preview || it.url;
+      im.alt = it.title || "";
+      im.loading = "lazy";
+      b.appendChild(im);
+      b.addEventListener("click", () => {
+        const gif = { url: it.url, w: it.w, h: it.h, title: it.title };
+        send({ type: "chat", gif });
+        addChatGif("You", gif, true);
+        saveGifRecent(it);
+        picker.classList.remove("open");
+      });
+      grid.appendChild(b);
+    });
+  }
+
+  async function loadFeed(){
+    if (tab === "emoji") return;
+    const q = search.value.trim();
+    const mode = q ? "search" : "trending";
+    note.textContent = "Loading…";
+    try {
+      const r = await fetch("/gifs?type=" + tab + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
+      if (r.status === 501) {
+        grid.innerHTML = "";
+        note.textContent = "GIF search isn't switched on yet — it needs a free Klipy key (one-time setup). The Emoji tab works right now.";
+        return;
+      }
+      if (!r.ok) throw new Error("feed " + r.status);
+      const data = await r.json();
+      grid.innerHTML = "";
+      note.textContent = data.items.length ? "" : "Nothing found — try another word.";
+      if (!q && tab === "gifs") {
+        const rec = loadGifRecents();
+        if (rec.length) appendItems(rec, "Recent");
+        appendItems(data.items, rec.length ? "Trending" : "");
+      } else {
+        appendItems(data.items, "");
+      }
+    } catch (e) {
+      note.textContent = "GIFs couldn't load just now — check the connection and try again.";
+    }
+  }
+
+  function buildEmoji(){
+    emojiBuilt = true;
+    PICKER_EMOJIS.forEach(e => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "gp-emo";
+      b.textContent = e;
+      b.addEventListener("click", () => { input.value += e; input.focus(); });
+      emojiBox.appendChild(b);
+    });
+  }
+
+  function setTab(t){
+    tab = t;
+    picker.querySelectorAll("[data-gptab]").forEach(b => b.classList.toggle("on", b.dataset.gptab === t));
+    const isEmoji = t === "emoji";
+    emojiBox.style.display = isEmoji ? "grid" : "none";
+    grid.style.display = isEmoji ? "none" : "grid";
+    searchWrap.style.display = isEmoji ? "none" : "flex";
+    search.placeholder = t === "stickers" ? "Search stickers" : "Search GIFs";
+    note.textContent = "";
+    if (isEmoji) { if (!emojiBuilt) buildEmoji(); }
+    else loadFeed();
+  }
+
+  function togglePicker(t){
+    if (picker.classList.contains("open") && tab === t) { picker.classList.remove("open"); return; }
+    picker.classList.add("open");
+    setTab(t);
+    if (t !== "emoji") search.focus();
+  }
+  const gifBtn = panel.querySelector("[data-gifbtn]");
+  const emoBtn = panel.querySelector("[data-emojibtn]");
+  if (gifBtn) gifBtn.addEventListener("click", () => togglePicker("gifs"));
+  if (emoBtn) emoBtn.addEventListener("click", () => togglePicker("emoji"));
+  picker.querySelector("[data-gpclose]").addEventListener("click", () => picker.classList.remove("open"));
+  picker.querySelectorAll("[data-gptab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.gptab)));
+  search.addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadFeed, 350); });
 });
 
 /* ---------- LASER POINTER ---------- */
@@ -1881,7 +2075,10 @@ function hostHandlers(){
     answer: async msg => { await pc.setRemoteDescription(msg.sdp); await flushIce(); },
     ice: async msg => { await addIce(msg.candidate); },
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
-    chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
+    chat: msg => {
+      if (msg.gif && typeof msg.gif.url === "string" && (/^https:\/\//.test(msg.gif.url) || /^http:\/\/(127\.0\.0\.1|localhost)/.test(msg.gif.url))) addChatGif("Them", msg.gif, false);
+      else if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false);
+    },
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),
@@ -2043,7 +2240,10 @@ function guestHandlers(){
     },
     ice: async msg => { await addIce(msg.candidate); },
     reaction: msg => { if (REACTIONS.includes(msg.emoji)) spawnReaction(msg.emoji); },
-    chat: msg => { if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false); },
+    chat: msg => {
+      if (msg.gif && typeof msg.gif.url === "string" && (/^https:\/\//.test(msg.gif.url) || /^http:\/\/(127\.0\.0\.1|localhost)/.test(msg.gif.url))) addChatGif("Them", msg.gif, false);
+      else if (typeof msg.text === "string" && msg.text) addChat("Them", msg.text.slice(0, 500), false);
+    },
     pointer: msg => { if (typeof msg.x === "number" && typeof msg.y === "number") showPointer(Math.min(1, Math.max(0, msg.x)), Math.min(1, Math.max(0, msg.y)), msg.kind === "tap" ? "tap" : "move"); },
     draw: msg => { if (msg && (msg.ev === "start" || msg.ev === "seg" || msg.ev === "end")) receiveDraw(msg); },
     "draw-clear": () => clearDraw(false),

@@ -137,9 +137,10 @@ const server = http.createServer(async (req, res) => {
   const url = req.url.split("?")[0];
   if (url === "/favicon.ico") { res.writeHead(204); res.end(); return; }
   if (url === "/turn") {
-    // Return EVERY configured relay; the browser tries them all and uses
-    // whichever answers. Order = preference: Cloudflare, ExpressTURN,
-    // then the self-hosted VPS relay.
+    // Return the configured relays; the browser tries them all and
+    // uses whichever answers. Cloudflare first when configured,
+    // then ONE ExpressTURN account per call (rotated, see below).
+    // The self-hosted VPS relay is opt-in only (ENABLE_VPS_TURN=1).
     const servers = [];
     if (CF_TURN_KEY_ID && CF_TURN_TOKEN) {
       try {
@@ -185,7 +186,13 @@ const server = http.createServer(async (req, res) => {
       turnCounter += 1;
       servers.push(etEntries[turnCounter % etEntries.length]);
     }
-    if (TURN_SECRET) {
+    // The self-hosted VPS relay is OUT of the rotation by default
+    // (eres, 2026-11-26): it was riding along in every /turn answer
+    // and a session that nominated it showed 322 ms / bandwidth-
+    // starved stats while the ExpressTURN pool sat unused. The 7
+    // ExpressTURN accounts above are the pool now. Re-enable only
+    // by setting ENABLE_VPS_TURN=1 in the environment.
+    if (TURN_SECRET && process.env.ENABLE_VPS_TURN === "1") {
       const username = String(Math.floor(Date.now() / 1000) + 3600);
       const credential = crypto.createHmac("sha1", TURN_SECRET).update(username).digest("base64");
       servers.push({ urls: TURN_URLS, username, credential });

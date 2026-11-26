@@ -1309,6 +1309,12 @@ const ICONS = {
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3"/><path d="M1 14h6M9 8h6M17 16h6"/>',
 };
 const SOUNDBOARD = [
+  { id: "sixseven", name: "67", icon: "sparkles", bg: "#EDE9FE", fg: "#7C3AED" },
+  { id: "pikachu", name: "Pikachu", icon: "zap", bg: "#FEF9C3", fg: "#A16207" },
+  { id: "bruh", name: "Bruh", icon: "wind", bg: "#E5E7EB", fg: "#374151" },
+  { id: "vineboom", name: "Vine boom", icon: "burst", bg: "#FEE2E2", fg: "#991B1B" },
+  { id: "metalpipe", name: "Metal pipe", icon: "domebell", bg: "#E0F2FE", fg: "#0369A1" },
+  { id: "dundun", name: "Dun dun duuun", icon: "music", bg: "#FCE7F3", fg: "#9D174D" },
   { id: "quack", name: "Quack", icon: "waves", bg: "#FEF3C7", fg: "#B45309" },
   { id: "airhorn", name: "Airhorn", icon: "horn", bg: "#FEE2E2", fg: "#B91C1C" },
   { id: "badum", name: "Ba dum tss", icon: "drum", bg: "#FCE7F3", fg: "#BE185D" },
@@ -1338,6 +1344,7 @@ const SOUNDBOARD = [
 /* Sounds that have a real recording in /sounds/. "kiss" is the only
    one without — no freely-licensed recording of it could be found. */
 const REAL_SOUNDS = new Set([
+  "sixseven", "pikachu", "bruh", "vineboom", "metalpipe", "dundun",
   "quack", "airhorn", "badum", "sadhorn", "cricket", "clap", "applause",
   "tada", "fart", "buzzer", "coin", "levelup", "boing", "laser", "pop",
   "whistle", "doorbell", "ringring", "ding", "shutter", "drop",
@@ -1482,6 +1489,11 @@ function playSynth(name){
     blip(ac, master, t, 180, 330, 0.16, "sawtooth", 0.24);
     blip(ac, master, t + 0.17, 330, 180, 0.16, "sawtooth", 0.24);
     blip(ac, master, t + 0.34, 180, 300, 0.3, "sawtooth", 0.22);
+  } else {
+    /* Any sound without its own recipe (the meme additions):
+       a plain two-tone blip, so a fallback tap is never silent. */
+    blip(ac, master, t, 660, 660, 0.09, "square", 0.2);
+    blip(ac, master, t + 0.11, 440, 440, 0.14, "square", 0.2);
   }
 }
 document.querySelectorAll(".soundbar").forEach(bar => {
@@ -1827,6 +1839,7 @@ function stopLadder(){
 }
 window.__ladder = LADDER;
 
+let pinTimer = null;
 function tuneSender(stream, tierOverride){
   /* Reads the LIVE selects on the host stage, so changing quality
      mid-share re-tunes the running stream without a restart. With
@@ -1886,7 +1899,14 @@ function tuneSender(stream, tierOverride){
       delete p.encodings[0].scaleResolutionDownBy;
       delete p.encodings[0].scaleResolutionDownTo;
     }
-    p.degradationPreference = motion ? "maintain-framerate" : "maintain-resolution";
+    /* A fixed pick is a promise about picture size: when the link
+       gets tight the browser must trade fps, never resolution.
+       (With "maintain-framerate" Chromium protects the fps number
+       by crushing the picture instead — 54 fps at 320x180 on a
+       starved relay — which is exactly what a fixed tier exists to
+       refuse.) In Auto the ladder is steering, so the mode's own
+       preference applies there as before. */
+    p.degradationPreference = (effQ && !lad) ? "maintain-resolution" : (motion ? "maintain-framerate" : "maintain-resolution");
     sender.setParameters(p).catch(()=>{});
     /* The screen's audio sender gets its real bitrate too — the
        fmtp asks for 128 kbps stereo; this is the cap that lets
@@ -1907,6 +1927,22 @@ function tuneSender(stream, tierOverride){
   if (!tierOverride) {
     if (QUALITY[selVal]) stopLadder();
     else if (localStream) startLadder();
+  }
+  /* Pin keep-alive: Chromium's quality scaler runs continuously
+     and can quietly re-introduce resolution scaling minutes after
+     the last tune — the opening burst of asserts is not enough on
+     a long share. While a FIXED tier is in force, re-assert the
+     same parameters every 5 s so the pin holds for the whole
+     share. The ladder steers itself and never starts this; the
+     interval self-clears when the share ends. */
+  if (!tierOverride) {
+    if (pinTimer) { clearInterval(pinTimer); pinTimer = null; }
+    if (QUALITY[selVal]) {
+      pinTimer = setInterval(() => {
+        if (!localStream || !pc) { clearInterval(pinTimer); pinTimer = null; return; }
+        apply();
+      }, 5000);
+    }
   }
 }
 

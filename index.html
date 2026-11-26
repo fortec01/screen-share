@@ -893,19 +893,15 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
   }
 
   async function loadFeed(){
+    if (tab === "emoji") { loadEmojiFeed(); return; }
     const q = search.value.trim();
     const mode = q ? "search" : "trending";
     note.textContent = "Loading…";
     try {
-      let feedType = tab === "emoji" ? "ggemojis" : tab;
-      let r = await fetch("/gifs?type=" + feedType + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
-      if (tab === "emoji" && !r.ok) {
-        feedType = "emojis";
-        r = await fetch("/gifs?type=emojis&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
-      }
+      const r = await fetch("/gifs?type=" + tab + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
       if (r.status === 501) {
         grid.innerHTML = "";
-        note.textContent = "GIF, sticker and animated-emoji search isn't switched on yet — it needs a free Klipy key (one-time setup). The standard emoji below work right now.";
+        note.textContent = "GIF and sticker search isn't switched on yet — it needs a free Klipy key (one-time setup). The Emoji tab works right now.";
         return;
       }
       if (!r.ok) throw new Error("feed " + r.status);
@@ -916,14 +912,74 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
         const rec = loadGifRecents();
         if (rec.length) appendItems(rec, "Recent");
         appendItems(data.items, rec.length ? "Trending" : "");
-      } else if (tab === "emoji") {
-        appendItems(data.items, data.items.length ? (feedType === "ggemojis" ? "Discord animated emoji — tap to send" : "Animated emoji — tap to send") : "");
       } else {
         appendItems(data.items, "");
       }
     } catch (e) {
       note.textContent = "GIFs couldn't load just now — check the connection and try again.";
     }
+  }
+
+  // emoji.gg animated emojis. Their API is CORS-open but blocks
+  // datacenter IPs, so the browser fetches it directly; the
+  // filtered animated list (~700) is cached for a day. Behind it:
+  // our server's emoji.gg feed, then Klipy's emoji library.
+  const GG_BLOCK = /sex|porn|hentai|nsfw|nudes?|dick|cock|pussy|boobs?|titty|titties|cumshot|penis|vagina|blowjob|handjob|horny|ahegao|bdsm|nigger|nigga|faggot|\btits?\b|\banal\b|\blewd\b|\bmilf\b|\bfap\b/i;
+  let ggListCache = null;
+  async function ggEmojiList(){
+    if (ggListCache) return ggListCache;
+    try {
+      const raw = localStorage.getItem("ss-gg-emoji");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && Date.now() - p.t < 86400000 && Array.isArray(p.items) && p.items.length) { ggListCache = p.items; return ggListCache; }
+      }
+    } catch (e) {}
+    const r = await fetch("https://emoji.gg/api", { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error("emoji.gg " + r.status);
+    const all = await r.json();
+    const items = (Array.isArray(all) ? all : [])
+      .filter(e => e && typeof e.image === "string" && e.image.endsWith(".gif") && !GG_BLOCK.test(e.title || ""))
+      .sort((a, b) => (b.faves || 0) - (a.faves || 0))
+      .map(e => ({ id: "gg" + e.id, title: String(e.title || "emoji").slice(0, 80), preview: e.image, url: e.image, w: 128, h: 128 }));
+    if (!items.length) throw new Error("emoji.gg empty");
+    ggListCache = items;
+    try { localStorage.setItem("ss-gg-emoji", JSON.stringify({ t: Date.now(), items })); } catch (e) {}
+    return items;
+  }
+
+  async function loadEmojiFeed(){
+    const q = search.value.trim();
+    const mode = q ? "search" : "trending";
+    const qs = q ? "&q=" + encodeURIComponent(q) : "";
+    note.textContent = "Loading…";
+    let items = null, label = "Discord animated emoji — tap to send";
+    try {
+      const list = await ggEmojiList();
+      const needle = q.toLowerCase();
+      items = (needle ? list.filter(i => i.title.toLowerCase().includes(needle)) : list).slice(0, 24);
+    } catch (e) { items = null; }
+    if (!items) {
+      try {
+        const r = await fetch("/gifs?type=ggemojis&mode=" + mode + qs);
+        if (r.ok) items = (await r.json()).items;
+      } catch (e) {}
+    }
+    if (!items) {
+      try {
+        const r = await fetch("/gifs?type=emojis&mode=" + mode + qs);
+        if (r.status === 501) {
+          grid.innerHTML = "";
+          note.textContent = "Animated emoji couldn't load, and the Klipy key isn't set yet. The standard emoji below work right now.";
+          return;
+        }
+        if (r.ok) { items = (await r.json()).items; label = "Animated emoji — tap to send"; }
+      } catch (e) {}
+    }
+    if (!items) { note.textContent = "Animated emoji couldn't load just now — check the connection and try again."; return; }
+    grid.innerHTML = "";
+    note.textContent = items.length ? "" : "Nothing found — try another word.";
+    appendItems(items, items.length ? label : "");
   }
 
   function buildEmoji(){

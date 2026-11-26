@@ -302,13 +302,6 @@
   .toolspage .reactbar, .toolspage .soundbar, .toolspage .drawtools, .toolspage .codebox, .toolspage .setrow{margin-top:0;}
   .toolspage .drawtools{display:flex;}
   @media (max-width:899px){ .toolspanel{bottom:106px; max-height:62%;} }
-  /* Waiting face: two avatars centred on the black stage until the
-     stream is live — the Discord voice-call look. */
-  .waitingface{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:14px; pointer-events:none; z-index:2;}
-  .wf-ava{width:84px; height:84px; border-radius:50%; background:var(--d-panel2); border:2px solid #3f4147; display:flex; align-items:center; justify-content:center; color:var(--d-muted);}
-  .wf-ava svg{width:40px; height:40px;}
-  .wf-ava.me{background:var(--blurple); color:#fff; border-color:transparent;}
-  .videobox:has(.dot.live) .waitingface{display:none;}
   @media (max-width:899px){
     .panelhead{flex-wrap:nowrap;}
     .paneltab{padding:7px 10px; font-size:13px;}
@@ -526,7 +519,6 @@
           <div class="reactlayer" id="guestReactLayer"></div>
           <div class="pointerlayer" id="guestPointerLayer"></div>
           <canvas class="drawcanvas" id="guestDrawCanvas"></canvas>
-          <div class="waitingface"><div class="wf-ava me"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.9 0-8 2-8 5v1h16v-1c0-3-4.1-5-8-5z"/></svg></div><div class="wf-ava"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0-5-5 5 5 0 0 0 5 5zm0 2c-3.9 0-8 2-8 5v1h16v-1c0-3-4.1-5-8-5z"/></svg></div></div>
           <div class="playoverlay" id="playOverlay" style="display:none"><span class="playbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span><span>Tap to play</span></div>
           <div class="tilelabel"><span class="livebadge">LIVE</span><span class="tile-name">Them</span></div>
           <div class="tiletools"><button type="button" class="tiletool fsbtn" data-fs aria-label="Full screen"><svg class="ic-enter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><svg class="ic-exit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/></svg></button></div>

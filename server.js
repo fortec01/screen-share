@@ -93,6 +93,17 @@ let ggCache = { t: 0, items: null };
 const GG_BLOCK = /sex|porn|hentai|nsfw|nudes?|dick|cock|pussy|boobs?|titty|titties|cumshot|penis|vagina|blowjob|handjob|horny|ahegao|bdsm|nigger|nigga|faggot|\btits?\b|\banal\b|\blewd\b|\bmilf\b|\bfap\b/i;
 async function ggAnimated() {
   if (ggCache.items && Date.now() - ggCache.t < 3600000) return ggCache.items;
+  // Preferred source: the snapshot shipped with the app
+  // (gg-animated.json — emoji.gg blocks datacenter IPs, so the
+  // live fetch below fails on hosted servers; the snapshot is
+  // generated from their public API and refreshed on redeploys).
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(PUBLIC, "gg-animated.json"), "utf8"));
+    const items = raw
+      .filter(e => e && typeof e.image === "string" && e.image.endsWith(".gif") && !GG_BLOCK.test(e.title || ""))
+      .map(e => ({ id: "gg" + e.id, title: String(e.title || "emoji").slice(0, 80), preview: e.image, url: e.image, w: 128, h: 128 }));
+    if (items.length) { ggCache = { t: Date.now(), items }; return items; }
+  } catch (e) { /* fall through to the live fetch */ }
   const r = await fetch("https://emoji.gg/api", {
     signal: AbortSignal.timeout(15000),
     headers: { "User-Agent": "ScreenShare/1.0 (personal chat app)" },
@@ -213,7 +224,7 @@ const server = http.createServer(async (req, res) => {
         const all = await ggAnimated();
         const needle = query.toLowerCase();
         const filtered = needle ? all.filter(i => i.title.toLowerCase().includes(needle)) : all;
-        const page = Math.min(20, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
+        const page = Math.min(40, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
         res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
         res.end(JSON.stringify({ items: filtered.slice((page - 1) * 24, page * 24) }));
       } catch (e) {
@@ -232,7 +243,7 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({ error: "empty search" }));
       return;
     }
-    const page = Math.min(5, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
+    const page = Math.min(20, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
     const cacheKey = [type, mode, query, page].join("|");
     const hit = gifCache.get(cacheKey);
     if (hit && Date.now() - hit.t < 180000) {

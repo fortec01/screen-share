@@ -330,7 +330,7 @@
      Discord-style: a GIF button and an emoji button in the chat row
      open a picker inside the chat panel — tabs for GIFs, Stickers
      and Emoji, a search box, and a scrolling grid. GIFs come from
-     Klipy via the server's /gifs feed (key stays server-side). */
+     the GIF library via the server's /gifs feed (key stays server-side). */
   .room .chatrow .gifbtn{width:auto; height:40px; padding:0 9px; margin:0; border-radius:8px; background:var(--d-input); color:var(--d-muted); font-size:11px; font-weight:800; letter-spacing:.5px; flex:none;}
   .room .chatrow .gifbtn:hover{background:#43464d; color:var(--d-bright);}
   .room .chatrow .emojibtn{width:40px; height:40px; padding:0; margin:0; border-radius:8px; background:var(--d-input); color:var(--d-muted); flex:none; display:flex; align-items:center; justify-content:center;}
@@ -505,7 +505,7 @@
           <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
           <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
           <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-head" data-gpstdhead style="display:none">Standard emoji — tap to add to your message</div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
-          <div class="gp-foot">GIFs by Klipy · Emoji by emoji.gg</div>
+          <div class="gp-foot">Emoji by emoji.gg</div>
         </div>
 <div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
@@ -589,7 +589,7 @@
           <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
           <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
           <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-head" data-gpstdhead style="display:none">Standard emoji — tap to add to your message</div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
-          <div class="gp-foot">GIFs by Klipy · Emoji by emoji.gg</div>
+          <div class="gp-foot">Emoji by emoji.gg</div>
         </div>
 <div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
@@ -836,7 +836,7 @@ function addChatGif(who, gif, mine){
 
 /* ---------- GIF / STICKER / EMOJI PICKER ---------- */
 /* One picker per chat panel. GIFs and stickers load from the
-   server's /gifs feed (Klipy); picking one sends it as a chat
+   server's /gifs feed (the GIF library); picking one sends it as a chat
    message the other side renders inline. Emoji are plain unicode
    and insert into the message box — no network needed. Recents
    live in localStorage, like Discord's Frequently Used. */
@@ -860,7 +860,10 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
   const search = picker.querySelector("[data-gpsearch]");
   const searchWrap = picker.querySelector(".gp-search");
   const stdHead = picker.querySelector("[data-gpstdhead]");
+  const gpBody = picker.querySelector(".gp-body");
   let tab = "gifs", debounce = null, emojiBuilt = false;
+  let feedPage = 1, feedEnd = false, feedLoading = false, feedGen = 0;
+  let emojiSource = null, ggFiltered = null, ggShown = 0;
 
   function appendItems(items, heading){
     const sendEmoji = tab === "emoji";
@@ -894,6 +897,8 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
 
   async function loadFeed(){
     if (tab === "emoji") { loadEmojiFeed(); return; }
+    const gen = ++feedGen;
+    feedPage = 1; feedEnd = false;
     const q = search.value.trim();
     const mode = q ? "search" : "trending";
     note.textContent = "Loading…";
@@ -901,11 +906,13 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
       const r = await fetch("/gifs?type=" + tab + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
       if (r.status === 501) {
         grid.innerHTML = "";
-        note.textContent = "GIF and sticker search isn't switched on yet — it needs a free Klipy key (one-time setup). The Emoji tab works right now.";
+        note.textContent = "GIF and sticker search isn't switched on yet (one-time setup). The Emoji tab works right now.";
         return;
       }
       if (!r.ok) throw new Error("feed " + r.status);
       const data = await r.json();
+      if (gen !== feedGen) return;
+      if (data.items.length < 24) feedEnd = true;
       grid.innerHTML = "";
       note.textContent = data.items.length ? "" : "Nothing found — try another word.";
       if (!q && tab === "gifs") {
@@ -920,10 +927,44 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
     }
   }
 
+  // Infinite scroll: near the bottom of the picker, append the
+  // next page of whatever feed is showing until it runs out.
+  async function loadMore(){
+    if (feedLoading || feedEnd || !picker.classList.contains("open")) return;
+    feedLoading = true;
+    const gen = feedGen;
+    const q = search.value.trim();
+    const mode = q ? "search" : "trending";
+    const qs = q ? "&q=" + encodeURIComponent(q) : "";
+    try {
+      if (tab === "emoji" && emojiSource === "direct" && ggFiltered) {
+        const next = ggFiltered.slice(ggShown, ggShown + 48);
+        if (!next.length) feedEnd = true;
+        else {
+          ggShown += next.length;
+          if (ggShown >= ggFiltered.length) feedEnd = true;
+          appendItems(next, "");
+        }
+      } else {
+        const type = tab === "emoji" ? (emojiSource === "backup" ? "emojis" : "ggemojis") : tab;
+        const nextPage = feedPage + 1;
+        const r = await fetch("/gifs?type=" + type + "&mode=" + mode + qs + "&page=" + nextPage);
+        if (gen !== feedGen) return;
+        if (!r.ok) { feedEnd = true; return; }
+        const data = await r.json();
+        if (gen !== feedGen) return;
+        feedPage = nextPage;
+        if (data.items.length < 24) feedEnd = true;
+        appendItems(data.items, "");
+      }
+    } catch (e) {}
+    finally { feedLoading = false; }
+  }
+
   // emoji.gg animated emojis. Their API is CORS-open but blocks
   // datacenter IPs, so the browser fetches it directly; the
   // filtered animated list (~700) is cached for a day. Behind it:
-  // our server's emoji.gg feed, then Klipy's emoji library.
+  // our server's emoji.gg feed, then the GIF library's emoji library.
   const GG_BLOCK = /sex|porn|hentai|nsfw|nudes?|dick|cock|pussy|boobs?|titty|titties|cumshot|penis|vagina|blowjob|handjob|horny|ahegao|bdsm|nigger|nigga|faggot|\btits?\b|\banal\b|\blewd\b|\bmilf\b|\bfap\b/i;
   let ggListCache = null;
   async function ggEmojiList(){
@@ -949,34 +990,47 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
   }
 
   async function loadEmojiFeed(){
+    const gen = ++feedGen;
+    feedPage = 1; feedEnd = false; emojiSource = null; ggFiltered = null; ggShown = 0;
     const q = search.value.trim();
     const mode = q ? "search" : "trending";
     const qs = q ? "&q=" + encodeURIComponent(q) : "";
     note.textContent = "Loading…";
     let items = null, label = "Discord animated emoji — tap to send";
+    // 1) Our own server's snapshot of the emoji.gg animated list —
+    //    fast and always available (emoji.gg blocks datacenter
+    //    IPs, and the full direct download is 2 MB on slow links).
     try {
-      const list = await ggEmojiList();
-      const needle = q.toLowerCase();
-      items = (needle ? list.filter(i => i.title.toLowerCase().includes(needle)) : list).slice(0, 24);
-    } catch (e) { items = null; }
+      const r = await fetch("/gifs?type=ggemojis&mode=" + mode + qs);
+      if (r.ok) { items = (await r.json()).items; emojiSource = "server"; }
+    } catch (e) {}
+    // 2) emoji.gg direct from the browser (their API is CORS-open).
     if (!items) {
       try {
-        const r = await fetch("/gifs?type=ggemojis&mode=" + mode + qs);
-        if (r.ok) items = (await r.json()).items;
-      } catch (e) {}
+        const list = await ggEmojiList();
+        const needle = q.toLowerCase();
+        ggFiltered = needle ? list.filter(i => i.title.toLowerCase().includes(needle)) : list;
+        items = ggFiltered.slice(0, 48);
+        ggShown = items.length;
+        if (ggShown >= ggFiltered.length) feedEnd = true;
+        emojiSource = "direct";
+      } catch (e) { items = null; }
     }
+    // 3) The backup emoji library via our server.
     if (!items) {
       try {
         const r = await fetch("/gifs?type=emojis&mode=" + mode + qs);
         if (r.status === 501) {
           grid.innerHTML = "";
-          note.textContent = "Animated emoji couldn't load, and the Klipy key isn't set yet. The standard emoji below work right now.";
+          note.textContent = "Animated emoji couldn't load just now. The standard emoji below work right now.";
           return;
         }
-        if (r.ok) { items = (await r.json()).items; label = "Animated emoji — tap to send"; }
+        if (r.ok) { items = (await r.json()).items; label = "Animated emoji — tap to send"; emojiSource = "backup"; }
       } catch (e) {}
     }
+    if (gen !== feedGen) return;
     if (!items) { note.textContent = "Animated emoji couldn't load just now — check the connection and try again."; return; }
+    if (emojiSource !== "direct" && items.length < 24) feedEnd = true;
     grid.innerHTML = "";
     note.textContent = items.length ? "" : "Nothing found — try another word.";
     appendItems(items, items.length ? label : "");
@@ -1022,6 +1076,9 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
   picker.querySelector("[data-gpclose]").addEventListener("click", () => picker.classList.remove("open"));
   picker.querySelectorAll("[data-gptab]").forEach(b => b.addEventListener("click", () => setTab(b.dataset.gptab)));
   search.addEventListener("input", () => { clearTimeout(debounce); debounce = setTimeout(loadFeed, 350); });
+  if (gpBody) gpBody.addEventListener("scroll", () => {
+    if (gpBody.scrollTop + gpBody.clientHeight > gpBody.scrollHeight - 320) loadMore();
+  });
 });
 
 /* ---------- LASER POINTER ---------- */

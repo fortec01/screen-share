@@ -505,7 +505,7 @@
           <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
           <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
           <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-head" data-gpstdhead style="display:none">Standard emoji — tap to add to your message</div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
-          <div class="gp-foot">GIFs by Klipy</div>
+          <div class="gp-foot">GIFs by Klipy · Emoji by emoji.gg</div>
         </div>
 <div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="hostChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="hostChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
@@ -589,7 +589,7 @@
           <div class="gp-tabs"><button type="button" data-gptab="gifs" class="on">GIFs</button><button type="button" data-gptab="stickers">Stickers</button><button type="button" data-gptab="emoji">Emoji</button><button type="button" class="gp-x" data-gpclose aria-label="Close picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
           <div class="gp-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input data-gpsearch placeholder="Search GIFs" maxlength="60" autocomplete="off"></div>
           <div class="gp-body"><div class="gp-grid" data-gpgrid></div><div class="gp-head" data-gpstdhead style="display:none">Standard emoji — tap to add to your message</div><div class="gp-emoji" data-gpemoji></div><div class="gp-note" data-gpnote></div></div>
-          <div class="gp-foot">GIFs by Klipy</div>
+          <div class="gp-foot">GIFs by Klipy · Emoji by emoji.gg</div>
         </div>
 <div class="chatrow"><button type="button" class="gifbtn" data-gifbtn title="GIF picker">GIF</button><button type="button" class="emojibtn" data-emojibtn title="Emoji picker"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.6 14.2c.9 1.3 2 1.9 3.4 1.9s2.5-.6 3.4-1.9"/><path d="M9 9.4h.01M15 9.4h.01" stroke-width="2.6"/></svg></button><input id="guestChatInput" placeholder="Type a message…" maxlength="500" autocomplete="off"><button id="guestChatSend" aria-label="Send message"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
       </aside>
@@ -897,7 +897,12 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
     const mode = q ? "search" : "trending";
     note.textContent = "Loading…";
     try {
-      const r = await fetch("/gifs?type=" + tab + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
+      let feedType = tab === "emoji" ? "ggemojis" : tab;
+      let r = await fetch("/gifs?type=" + feedType + "&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
+      if (tab === "emoji" && !r.ok) {
+        feedType = "emojis";
+        r = await fetch("/gifs?type=emojis&mode=" + mode + (q ? "&q=" + encodeURIComponent(q) : ""));
+      }
       if (r.status === 501) {
         grid.innerHTML = "";
         note.textContent = "GIF, sticker and animated-emoji search isn't switched on yet — it needs a free Klipy key (one-time setup). The standard emoji below work right now.";
@@ -912,7 +917,7 @@ document.querySelectorAll(".chatpanel").forEach(panel => {
         if (rec.length) appendItems(rec, "Recent");
         appendItems(data.items, rec.length ? "Trending" : "");
       } else if (tab === "emoji") {
-        appendItems(data.items, data.items.length ? "Animated emoji — tap to send" : "");
+        appendItems(data.items, data.items.length ? (feedType === "ggemojis" ? "Discord animated emoji — tap to send" : "Animated emoji — tap to send") : "");
       } else {
         appendItems(data.items, "");
       }

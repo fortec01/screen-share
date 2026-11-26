@@ -84,6 +84,28 @@ function gifRendition(file, sizes, kinds) {
   }
   return null;
 }
+// emoji.gg: a public, keyless API listing Discord-style emojis.
+// One big list (~2 MB) — fetched once, the animated subset cached
+// in memory for an hour, then searched/paged here. Titles are
+// user-submitted, so a small explicit-terms filter keeps the
+// picker clean. Images hotlink straight from emoji.gg's CDN.
+let ggCache = { t: 0, items: null };
+const GG_BLOCK = /sex|porn|hentai|nsfw|nudes?|dick|cock|pussy|boobs?|titty|titties|cumshot|penis|vagina|blowjob|handjob|horny|ahegao|bdsm|nigger|nigga|faggot|\btits?\b|\banal\b|\blewd\b|\bmilf\b|\bfap\b/i;
+async function ggAnimated() {
+  if (ggCache.items && Date.now() - ggCache.t < 3600000) return ggCache.items;
+  const r = await fetch("https://emoji.gg/api", {
+    signal: AbortSignal.timeout(15000),
+    headers: { "User-Agent": "ScreenShare/1.0 (personal chat app)" },
+  });
+  if (!r.ok) throw new Error("emoji.gg " + r.status);
+  const all = await r.json();
+  const items = (Array.isArray(all) ? all : [])
+    .filter(e => e && typeof e.image === "string" && e.image.endsWith(".gif") && !GG_BLOCK.test(e.title || ""))
+    .sort((a, b) => (b.faves || 0) - (a.faves || 0))
+    .map(e => ({ id: "gg" + e.id, title: String(e.title || "emoji").slice(0, 80), preview: e.image, url: e.image, w: 128, h: 128 }));
+  ggCache = { t: Date.now(), items };
+  return items;
+}
 function normalizeGif(item) {
   if (!item || !item.file) return null;
   const full = gifRendition(item.file, ["hd", "md", "sm", "xs"], ["gif", "webp"]);
@@ -181,15 +203,30 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url === "/gifs") {
+    const q = new URL(req.url, "http://localhost").searchParams;
+    const type = ["gifs", "stickers", "emojis", "ggemojis"].includes(q.get("type")) ? q.get("type") : "gifs";
+    const mode = q.get("mode") === "search" ? "search" : "trending";
+    const query = (q.get("q") || "").slice(0, 60).trim();
+    if (type === "ggemojis") {
+      // No key needed — emoji.gg is an open API.
+      try {
+        const all = await ggAnimated();
+        const needle = query.toLowerCase();
+        const filtered = needle ? all.filter(i => i.title.toLowerCase().includes(needle)) : all;
+        const page = Math.min(20, Math.max(1, parseInt(q.get("page") || "1", 10) || 1));
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" });
+        res.end(JSON.stringify({ items: filtered.slice((page - 1) * 24, page * 24) }));
+      } catch (e) {
+        res.writeHead(502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "emoji feed failed" }));
+      }
+      return;
+    }
     if (!KLIPY_API_KEY) {
       res.writeHead(501, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "gif search is not set up yet" }));
       return;
     }
-    const q = new URL(req.url, "http://localhost").searchParams;
-    const type = ["gifs", "stickers", "emojis"].includes(q.get("type")) ? q.get("type") : "gifs";
-    const mode = q.get("mode") === "search" ? "search" : "trending";
-    const query = (q.get("q") || "").slice(0, 60).trim();
     if (mode === "search" && !query) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "empty search" }));

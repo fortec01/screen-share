@@ -652,6 +652,14 @@ let session = null;       // { role: "host"|"guest", code: string|null }
 let rejoinMode = null;    // "host"|"guest" while a restore is in flight
 let guestPresent = false; // host side: a viewer is seated in the room
 let wsHandlers = null, wsWanted = false, wsBackoff = 1000, wsRetryTimer = null;
+/* HEARTBEAT (client side): the signaling socket can die silently —
+   idle TCP killed with no close frame, so onclose never fires and
+   the room is never reclaimed (the 2026-11-26 viewer-kick bug).
+   Every 20 s we send {type:"ping"} and expect {type:"pong"} back
+   within 10 s; a missed reply means the socket is dead even though
+   it still looks open, so we force-close it — onclose then does
+   what it already does (reconnect with backoff, re-join the room). */
+let hbTimer = null, hbAwaiting = false;
 
 function saveSession(){
   try {
@@ -673,13 +681,33 @@ function connectWS(handlers){
 }
 function openWS(){
   if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+  hbAwaiting = false;
   ws = new WebSocket(WS_URL);
   ws.onmessage = e => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    if (msg.type === "pong") { hbAwaiting = false; return; }
     if (wsHandlers && wsHandlers[msg.type]) wsHandlers[msg.type](msg);
   };
-  ws.onopen = () => { wsBackoff = 1000; joinWire(); };
+  ws.onopen = () => {
+    wsBackoff = 1000; joinWire();
+    hbTimer = setInterval(() => {
+      if (!ws || ws.readyState !== 1) return;
+      if (hbAwaiting) {
+        // Last ping went unanswered for a full interval: the socket
+        // is dead although it still looks open. Force-close it so
+        // onclose reconnects and reclaims the room.
+        hbAwaiting = false;
+        try { ws.close(); } catch {}
+        return;
+      }
+      hbAwaiting = true;
+      try { ws.send(JSON.stringify({ type: "ping" })); } catch { hbAwaiting = false; }
+    }, 20000);
+  };
   ws.onclose = () => {
+    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+    hbAwaiting = false;
     if (!wsWanted) return;
     wsRetryTimer = setTimeout(() => { wsRetryTimer = null; if (wsWanted) openWS(); }, wsBackoff);
     wsBackoff = Math.min(wsBackoff * 2, 10000);

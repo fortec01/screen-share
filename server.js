@@ -19,9 +19,13 @@ const PUBLIC = __dirname;
 // closes (refresh, crash, network loss) the room is held this long
 // for the host to come back before the guest is told it ended. An
 // explicit End stream never waits — it closes the room at once.
+// 120 s (was 30 s): with the heartbeat below, a silently-dead
+// signaling socket is now detected and reclaimed in seconds, but a
+// laptop sleep/wake or a slow mobile reconnect can still take a
+// while — the longer window is the safety net, not the fix itself.
 const HOST_GRACE_MS = (() => {
   const n = parseInt(process.env.HOST_GRACE_MS, 10);
-  return Number.isFinite(n) && n >= 0 ? n : 30000;
+  return Number.isFinite(n) && n >= 0 ? n : 120000;
 })();
 
 // TURN relay (coturn on the VPS) with short-lived credentials:
@@ -285,16 +289,42 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 const rooms = new Map(); // code -> { host: ws|null, guest: ws|null, hostAway: bool, graceTimer: timer|null }
 
+// HEARTBEAT (server side): the bug reported 2026-11-26 — a viewer
+// was told "room has ended" mid-watch while the host's stream was
+// still live. Cause: the signaling socket can die silently (idle
+// TCP killed by a router/hosting network with no close frame), so
+// neither side's onclose fired and the host never reclaimed the
+// room before the grace window expired. The server now pings every
+// 20 s and drops any socket that stops answering, so a dead host
+// socket is noticed promptly (grace starts) instead of hanging
+// indefinitely; the client (index.html) runs the mirror check and
+// force-reconnects when its own pings go unanswered.
+const hbTimer = setInterval(() => {
+  wss.clients.forEach((c) => {
+    if (c.isAlive === false) { try { c.terminate(); } catch {} return; }
+    c.isAlive = false;
+    try { c.ping(); } catch {}
+  });
+}, 20000);
+if (hbTimer.unref) hbTimer.unref();
+
 function send(ws, obj) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj));
 }
 
 wss.on("connection", (ws) => {
   let myRoom = null, myRole = null;
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
 
   ws.on("message", (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+
+    // Application heartbeat: answered here only, never relayed to
+    // the other side (it is about this socket, not the room).
+    if (msg.type === "ping") { send(ws, { type: "pong" }); return; }
+    if (msg.type === "pong") return;
 
     if (msg.type === "create") {
       // host asks for a room code

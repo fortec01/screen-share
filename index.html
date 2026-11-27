@@ -2160,6 +2160,7 @@ function enterHostStage(stream){
      the stream for everyone — exactly like pressing End stream. */
   if (vt) vt.onended = endStream;
   grabWakeLock();
+  startNoViewerWatch();
 }
 
 /* Build the peer connection to the seated viewer and send the
@@ -2324,6 +2325,41 @@ if (!CAN_SHARE || IS_PHONE) {
   note.textContent = msg;
 }
 
+/* ---------- NO-VIEWER AUTO-END (bandwidth saver) ---------- */
+/* While the host is sharing, if nobody is actually watching —
+   no viewer seated, or a viewer whose connection is gone — for a
+   full NO_VIEWER_MS, the stream ends itself exactly the way
+   pressing End stream does, and the host lands home with a notice
+   saying why. A viewer present with a live (or still-connecting)
+   peer resets the clock just by being there. The check runs on a
+   slow tick and the window is long, so transient reconnects —
+   ICE restarts, a viewer rejoining inside the grace window —
+   never trip it. (Test pages can shrink the window with
+   &noviewer=<ms>.) */
+const NO_VIEWER_MS = (TEST && Number(new URLSearchParams(location.search).get("noviewer"))) || 5 * 60 * 1000;
+let noViewerSince = null, noViewerTick = null;
+function watchedNow(){
+  return !!(guestPresent && pc && (pc.connectionState === "connected" || pc.connectionState === "connecting"));
+}
+function startNoViewerWatch(){
+  if (noViewerTick) return;
+  noViewerSince = null;
+  noViewerTick = setInterval(() => {
+    if (!localStream) { stopNoViewerWatch(); return; }
+    if (watchedNow()) { noViewerSince = null; return; }
+    if (noViewerSince === null) { noViewerSince = Date.now(); return; }
+    if (Date.now() - noViewerSince >= NO_VIEWER_MS) {
+      stopNoViewerWatch();
+      setNotice("Stream auto-ended — nobody was watching for 5 minutes, so it closed to save bandwidth.");
+      endStream();
+    }
+  }, 5000);
+}
+function stopNoViewerWatch(){
+  if (noViewerTick) { clearInterval(noViewerTick); noViewerTick = null; }
+  noViewerSince = null;
+}
+
 function endStream(){
   /* Ending is final and closes the room for everyone: the server
      tells the viewer and deletes the room, and this page forgets
@@ -2334,6 +2370,7 @@ function endStream(){
      the server's grace window expiring ends the room anyway.) */
   if (session && session.role === "host") send({ type:"end-room" });
   clearSession();
+  stopNoViewerWatch();
   stopLadder();
   closeWS();
   if (localStream) localStream.getTracks().forEach(t => t.stop());
